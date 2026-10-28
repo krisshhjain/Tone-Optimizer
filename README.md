@@ -1,30 +1,27 @@
-# Tone Optimizer — V0 Foundation
+# Tone-Optimizer — V0 baseline
 
-A local Streamlit proof of concept for a fictional Personal Loan journey. One Nemotron Manager may request two deterministic Python helper tools. All requirements and values are fictional; this app does not connect to real banking systems.
+A local Streamlit proof of concept for a fictional Personal Loan conversation. One Nemotron Manager uses the V0 orchestration prompt and calls a deterministic Python helper for six ordered fictional rules. It is an evaluation project, not a loan application.
 
-## Safety and scope
+## Safety and data scope
 
-Use fictional demo values only. Never enter real customer information, PAN or Aadhaar numbers, identity documents, uploads, or banking information. The final rule is only a Boolean synthetic receipt flag; no document or identity data is collected.
+Use synthetic values only. Never enter real customer information, real PAN or Aadhaar values, identity documents, uploads, or banking information. The final requirement is only a Boolean flag for a fictional receipt; no document is collected.
 
-Configured values and constraints are test assumptions, not banking policy, eligibility, affordability, verification, or approval decisions. Completion means only that the fictional demo journey is complete. The app uses temporary Streamlit `st.session_state`; there is no database or durable storage.
+Synthetic entries can be retained temporarily in local Streamlit session state. No real loan application is created, no bank or real KYC system is contacted, and no permanent database is used. No claim is made here about the model provider's retention or logging practices. The configured requirements are fictional test rules, not actual banking policies or eligibility decisions. Completing the journey does not mean approval.
 
 ## Architecture
 
-- `app.py`: Streamlit interface, conversation and state controller.
-- `core/model_client.py`: OpenAI SDK client configured by `NVIDIA_API_KEY`, `NVIDIA_BASE_URL`, and `NVIDIA_MODEL`.
-- `core/manager.py`: assembles the V0 prompt and authoritative journey context, runs a bounded structured-tool loop, and only commits helper-returned state.
-- `core/business_rule_helper.py`: deterministic Python implementation of the two tool operations.
-- `core/rules.py` and `config/pl_rules.json`: load and validate the six ordered fictional rules.
-- `core/state.py`: accepted-prefix and staged-value state validation, progression, presets, and reset.
+- `app.py` — Streamlit chat, progress, and session controls.
+- `core/manager.py` — V0 prompt assembly, structured helper calls, refusal and unsupported-save safeguards.
+- `core/model_client.py` — OpenAI-compatible NVIDIA client using environment configuration.
+- `core/business_rule_helper.py` — deterministic read-context and submit-information tools, including per-field and event-level outcomes.
+- `core/rules.py`, `config/pl_rules.json` — six ordered fictional rules and validation.
+- `core/state.py` — temporary accepted/staged state and presets. Only helper-validated values advance progress.
+- `prompts/v0_orchestration.md` — the V0 Manager prompt under evaluation. No V1/V2 treatments are included.
+- `evaluation/` — fixed synthetic scenarios, human rubric, blank rating sheet, and run instructions.
+- `scripts/run_v0_evaluation.py` — offline mock or explicitly opted-in live scenario runner that calls the existing Manager runtime.
+- `scripts/summarize_v0_evaluation.py` — Markdown summary from recorded runs and optional human ratings.
 
-The Manager may propose values, but it cannot directly write state. `accepted_values` contains only validated values that have passed every earlier rule. `pending_values` contains valid future values staged after consent; staged fields remain incomplete until prerequisites are met. When an earlier requirement is accepted, contiguous staged values are validated and promoted in order. Invalid values do not advance state, and accepted or staged values cannot be overwritten silently.
-
-### Helper tools
-
-- `get_journey_context({})` returns the configured rules, completed/active/pending requirements, accepted values, and staged values.
-- `submit_information({"entries":[{"field":"loan_amount","value":150000}]})` validates one or more proposed values and returns per-field outcomes (`accepted`, `staged`, `invalid`, `already_completed`, `missing_prerequisite`, or `unknown_field`), committed fields, and the resulting active requirement.
-
-The controller returns each assistant tool-call message and its corresponding `tool_call_id` result to Nemotron before requesting a customer-facing response. The UI trace shows tool name, fields, outcome, and resulting active rule without logging request payloads or credentials. A bounded tool-call loop stops repeated calls safely. Model prose alone never marks a field complete.
+The Manager cannot write session values directly. Valid future values may be staged after consent, but only become complete after deterministic prerequisites pass. Tool events show `success`, `partial`, `rejected`, or `read`, with field-level outcomes.
 
 ## Setup
 
@@ -36,10 +33,10 @@ python -m venv .venv
 # macOS/Linux: source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pytest -q
-python -m compileall -q app.py core tests
+python -m compileall -q app.py core tests scripts
 ```
 
-Copy `.env.example` to `.env`; set the endpoint, exact model identifier, and API key provided for your NVIDIA account. Never commit or share `.env`; Git ignores it. Do not paste keys into chat or documentation.
+Copy `.env.example` to `.env` and set the exact NVIDIA endpoint, model identifier, and key from your local provider configuration. `.env` is ignored by Git. Never commit or share it. The app can start without credentials, but chat is disabled until configuration is available.
 
 ```dotenv
 NVIDIA_API_KEY=your-local-secret
@@ -47,39 +44,84 @@ NVIDIA_BASE_URL=https://your-openai-compatible-endpoint/v1
 NVIDIA_MODEL=your-exact-model-identifier
 ```
 
-Generation settings can also be configured with `NVIDIA_TEMPERATURE`, `NVIDIA_TOP_P`, `NVIDIA_MAX_TOKENS`, and `NVIDIA_TIMEOUT_SECONDS`.
+Optional generation settings are `NVIDIA_TEMPERATURE`, `NVIDIA_TOP_P`, `NVIDIA_MAX_TOKENS`, and `NVIDIA_TIMEOUT_SECONDS`. The same configured model and generation values are used across scenarios in each run.
 
-Start the app with:
+Start the local app:
 
 ```bash
 python -m streamlit run app.py
 ```
 
-The rules and presets remain inspectable without credentials; chat is disabled until configuration is complete. Automated tests use mocked clients and never require a real key.
+## Evaluation
 
-## Structured tool compatibility
+There are 30 synthetic cases: 5 normal progression, 5 clarification, 4 repetition/context, 5 language adaptation, 4 invalid values, 3 out-of-order, 2 refusals/interruption, and 2 completion/failure. Each records expected active rule, state changes, tool behavior, critical conditions, starting preset, and whether conversational evaluation requires the real API. No real identity or bank information is present.
 
-The compatibility check is deliberately separate from pytest and sends one small live request only when explicitly run:
+### Offline mocked run
+
+Offline is the default and makes no provider requests. It runs the real `run_manager_turn` and deterministic helper; fixed fixture tool calls mock only what the Manager model might extract from user text. The canned offline text is explicitly labeled as a mock and must not be treated as a Nemotron observation or quality rating.
 
 ```bash
-python scripts/check_live_tool_call.py --live
+python scripts/run_v0_evaluation.py --scenario-id V0-IV-03
+python scripts/run_v0_evaluation.py --category clarification_questions
+python scripts/run_v0_evaluation.py --all
 ```
 
-It reports only whether a valid structured function call was returned. A text-only response, unsupported schema, or provider error means tool-call compatibility is unconfirmed; it must not be treated as a successful state update. No live compatibility result is claimed until this command is run against the configured endpoint/model.
+Choose another output directory with `--output-dir path/to/output`. Each run writes turn-level JSONL, run metadata/final state JSON, and a blank human-rating CSV. Generated output under `evaluation/results/` is ignored by Git.
 
-The compatibility command was attempted in the current workspace but could not send a request because the OpenAI SDK is unavailable and package installation is blocked by the configured package-index network. Structured tool calling for the configured endpoint/model therefore remains unverified here.
+### Live Nemotron run
 
-## Manual fictional scenarios
+Live runs require `.env` and deliberate opt-in. They can consume provider quota. Begin with one scenario and a request cap:
 
-1. **Normal journey:** say hello, provide explicit consent, then a valid amount, tenure, employment category, positive monthly income, and synthetic receipt confirmation. Confirm all six requirements become complete; no loan approval is implied.
-2. **Clarification:** start with **Monthly income pending**, ask why income is requested. The answer should use configured information; BR-05 remains active and values do not change.
-3. **Invalid value:** start with **Tenure pending**, submit 7 months. The helper rejects it and the active rule remains BR-03.
-4. **Out of order:** from **Fresh application**, provide consent, amount, tenure, and employment in one message. The helper processes entries in rule order.
-5. **Hinglish question:** ask about tenure without supplying a value. No state mutation should occur just because a question was asked.
-6. **Tool failure:** simulate an unavailable/failed helper response. The app must not show a success confirmation or corrupt state.
+```bash
+python scripts/run_v0_evaluation.py --live --scenario-id V0-CL-04 --max-live-requests 4
+```
 
-## Limitations and roadmap
+Run all scenarios only when ready:
 
-The app is a local fictional POC. API availability, structured tool support, quotas, and model behavior depend on the configured provider endpoint and model. Use the compatibility check before relying on tool calling. If the endpoint does not support structured calls, the app must report that limitation and preserve state; a possible minimal fallback is an explicitly user-confirmed deterministic form submission, not inferred saves from model text.
+```bash
+python scripts/run_v0_evaluation.py --live --all --max-live-requests 100
+```
 
-Phase 1 established rules and state. Phase 2 added the read-only Nemotron Manager. Phase 3 adds helper-backed progression. Phase 4 evaluation materials, V1 conversational prompting, and V2 few-shot prompting remain out of scope.
+The request cap applies across the selected run, including follow-up tool rounds. A reached cap may leave a scenario with an explicit API error; helper-confirmed commits remain in its recorded final state. Do not describe a scenario as live-tested unless the output says it was run in `live` mode.
+
+The JSONL/JSON outputs record UTC timestamp, run/scenario IDs, V0 prompt and rule SHA-256 hashes, model ID, generation settings, git SHA when available, initial preset, expected/observed transitions, assistant text, sanitized tool outcomes, latency, errors, and final accepted/staged values. Keys, authorization headers, and hidden reasoning are not exported. Transcripts are synthetic and may be written as evaluation artifacts.
+
+### Human ratings and report
+
+Read `evaluation/rubric.md` before scoring. The blank template and each run-specific rating sheet have one row per customer turn, keyed by `run_id`, `scenario_id`, and `turn`. Enter integer scores 1–5 in the six dimension columns; leave unrateable or missing scores blank, never zero. Record reviewer ID, critical workflow violations separately, and brief evidence in reviewer notes. For a second rater, make a separate copy and use a different reviewer ID. The summarizer joins ratings to the exact turn and response, reports reviewer-specific and combined averages, and counts unmatched rows without scoring them.
+
+Generate a summary from recorded runs and any completed rating sheets:
+
+```bash
+python scripts/summarize_v0_evaluation.py
+python scripts/summarize_v0_evaluation.py --results-dir path/to/output --ratings path/to/ratings.csv --output path/to/summary.md
+```
+
+The report shows run success/failure, expected state/tool transition rates, candidate critical violations, mean/median recorded latency, human rating averages by dimension/category/language, and real response excerpts from saved outputs. Empty score columns display as **Not rated**. It does not ask a model to evaluate quality or create human scores. Critical-transition candidates are deterministic mismatch checks and are not a complete semantic audit of prose.
+
+Paths supplied with `--output-dir`, `--results-dir`, `--ratings`, or `--output` are validated. Parent-directory traversal and symlink/reparse-point components are rejected; explicitly selected absolute locations outside the repository are allowed when they are ordinary directories/files.
+
+## Manual live checks
+
+Run these in the Streamlit app and record actual Nemotron replies, tool events, and resulting state. These are instructions, not claimed results:
+
+1. **Invalid tenure:** select Tenure pending; say “I want 7 months.” Expect BR-03 active with no tenure accepted.
+2. **Out of order:** start fresh; say “I consent, amount 150000, tenure 24 months, and I'm salaried.” Expect order-preserving acceptance/staging and no skipped rule.
+3. **Clarification:** select Monthly income pending; ask “Monthly income kyun chahiye?” Expect a rule-grounded answer and no state change.
+4. **Refusal:** with monthly income active, say “I don't want to give my monthly income.” Expect no fabricated value or repeated pressure; the step stays active.
+5. **Full journey:** provide all six fictional fields in order. Expect helper-confirmed completion only; no approval claim.
+6. **Mixed values:** at an eligible state, submit one valid and one invalid field together. Expect accepted/rejected outcomes per field and a `partial` event where at least one operation succeeded.
+
+## Reproducibility and later comparisons
+
+The pinned V0 prompt SHA-256 is `69e6071c19c1ed66f48893bc79b33ad9078cb9244edb8d7562b435be27f42c99` (`prompts/v0_baseline.sha256`). The runner stops if the prompt file no longer matches this baseline. Every run records the prompt and rule hashes. Preserve scenario data, tool definitions, state-transition logic, initial presets, model, generation settings, and rubric when comparing versions. Later V1 and V2 experiments may be compared against these V0 outputs only after they are separately approved and implemented. A changed prompt or implementation is a distinct experiment; do not pool runs with different hashes as one baseline.
+
+Phase 4 stabilizes the V0 workflow and prepares reproducible evaluation. It does not implement V1 language mirroring, empathy prompting, few-shot examples, prompt comparisons, an LLM judge, dashboard, database, deployment, or additional services.
+
+## Known limitations
+
+- Live Nemotron responses and structured-call behavior depend on the configured endpoint and model; offline results are workflow mocks, not model performance evidence.
+- The refusal and unsupported-save text safeguards are intentionally lightweight and phrase-based. They cover tested patterns, not every possible paraphrase or claim; helper state remains authoritative.
+- Automatically detected critical violations are expected-transition mismatch candidates. Semantic policy claims still need human review.
+- No live runs or human quality scores are claimed by this repository change unless actual run artifacts are produced and reviewed.
+- Session state is temporary application memory, not durable storage. Provider-side handling has not been independently verified.

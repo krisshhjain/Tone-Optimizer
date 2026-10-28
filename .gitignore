@@ -7,3 +7,5 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .streamlit/secrets.toml
+evaluation/results/*
+!evaluation/results/.gitkeep

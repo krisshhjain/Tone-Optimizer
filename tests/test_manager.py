@@ -58,6 +58,10 @@ def test_v0_prompt_limits_rationales_to_configured_rules():
     assert "Do not invent eligibility, approval, identity verification" in prompt
     assert "read-only" not in prompt.lower()
     assert "tool result reports accepted or promoted fields" in prompt
+    assert "retained temporarily in this local Streamlit session" in prompt
+    assert "No real loan application is created" in prompt
+    assert "no permanent database is used" in prompt
+    assert "If the customer declines" in prompt
 
 
 def model_config():
@@ -126,6 +130,17 @@ def test_clarification_turn_does_not_mutate_application_values():
     assert result["state"]["accepted_values"] == state["accepted_values"]
     assert result["state"]["pending_values"] == {}
     assert result["state"]["tool_events"] == []
+
+
+def test_successful_context_lookup_is_labeled_read():
+    client = SequenceClient([
+        completion(assistant_message(calls=[tool_call("get_journey_context", "{}", "read-1")])),
+        completion(assistant_message("The current required item is consent.")),
+    ])
+    result = run_manager_turn(initialize_scenario(), "What is current?", model_config(), client)
+    assert result["tool_events"][0]["status"] == "read"
+    assert result["tool_events"][0]["success"] is True
+    assert result["state"]["accepted_values"] == {}
 
 
 def test_unknown_tool_gets_correlated_error_and_does_not_mutate_state():
@@ -207,4 +222,76 @@ def test_api_failure_returns_safe_error_and_preserves_values():
     result = run_manager_turn(state, "Yes", model_config(), client)
     assert result["error"] == "The model request timed out. Please try again."
     assert result["state"]["accepted_values"] == {}
-
+
+
+def test_unsupported_save_claim_without_submit_is_replaced():
+    client = SequenceClient([completion(assistant_message("Your information was saved successfully."))])
+    result = run_manager_turn(initialize_scenario(), "Hi", model_config(), client)
+    assert "didn't save any new information" in result["reply"]
+    assert result["state"]["accepted_values"] == {}
+
+
+def test_mixed_submission_reports_partial_and_exact_outcomes():
+    client = SequenceClient([
+        completion(assistant_message(calls=[tool_call("submit_information", json.dumps({"entries": [
+            {"field": "consent", "value": True},
+            {"field": "loan_amount", "value": 150000},
+            {"field": "tenure_months", "value": 7},
+        ]}))])),
+        completion(assistant_message("Both values were accepted.")),
+    ])
+    result = run_manager_turn(
+        initialize_scenario(), "I consent, amount 150000, tenure 7 months.", model_config(), client,
+    )
+    event = result["tool_events"][-1]
+    assert event["status"] == "partial"
+    assert event["outcomes"] == [
+        {"field": "consent", "status": "accepted"},
+        {"field": "loan_amount", "status": "accepted"},
+        {"field": "tenure_months", "status": "invalid"},
+    ]
+    assert "rejected: Tenure" in result["reply"]
+    assert result["state"]["accepted_values"] == {"consent": True, "loan_amount": 150000}
+
+
+def test_successful_commit_survives_followup_api_failure_without_retry():
+    client = SequenceClient([
+        completion(assistant_message(calls=[tool_call("submit_information", json.dumps({"entries": [
+            {"field": "tenure_months", "value": 24},
+        ]}))])),
+        TimeoutError("provider diagnostic must not leak"),
+    ])
+    state = initialize_scenario("Tenure pending")
+    result = run_manager_turn(state, "24 months", model_config(), client)
+    assert result["state"]["accepted_values"]["tenure_months"] == 24
+    assert len(client.requests) == 2
+    assert result["reply"] and "accepted: Tenure" in result["reply"]
+    assert "no retry" in result["reply"]
+    assert "diagnostic" not in result["error"]
+
+
+def test_refusal_does_not_repeat_pressure_or_change_state():
+    client = SequenceClient([completion(assistant_message("Please select salaried, self-employed, or other."))])
+    state = initialize_scenario("Monthly income pending")
+    result = run_manager_turn(
+        state, "I don't want to give my employment type.", model_config(), client,
+    )
+    assert "stop, answer a question, or continue later" in result["reply"]
+    assert "Please select" not in result["reply"]
+    assert result["state"]["accepted_values"] == state["accepted_values"]
+    assert result["state"]["tool_events"] == []
+
+
+def test_refusal_blocks_model_proposed_state_change():
+    client = SequenceClient([
+        completion(assistant_message(calls=[tool_call("submit_information", json.dumps({"entries": [
+            {"field": "monthly_income", "value": 50000},
+        ]}))])),
+        completion(assistant_message("I will not record this.")),
+    ])
+    state = initialize_scenario("Monthly income pending")
+    result = run_manager_turn(state, "I don't want to give my monthly income.", model_config(), client)
+    assert result["state"]["accepted_values"] == state["accepted_values"]
+    assert result["state"]["pending_values"] == {}
+    assert result["tool_events"][-1]["status"] == "rejected"
+    assert result["reply"] and "stop, answer a question, or continue later" in result["reply"]

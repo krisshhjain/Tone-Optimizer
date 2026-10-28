@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -86,8 +87,10 @@ def _tool_result(
             raise ToolInputError("Unknown helper tool.")
         success = bool(result.get("ok"))
         outcomes = result.get("outcomes", [])
-        success = success and all(
-            outcome.get("status") in {"accepted", "staged"} for outcome in outcomes
+        succeeded = [outcome for outcome in outcomes if outcome.get("status") in {"accepted", "staged"}]
+        failed = [outcome for outcome in outcomes if outcome.get("status") not in {"accepted", "staged"}]
+        status = "read" if name == "get_journey_context" and success else (
+            "success" if success and not failed else "partial" if succeeded else "rejected"
         )
         active = result.get("active_requirement") or get_journey_context(current, rules)["active_requirement"]
         event = {
@@ -97,7 +100,8 @@ def _tool_result(
                 {"field": outcome.get("field"), "status": outcome.get("status")}
                 for outcome in outcomes
             ],
-            "success": success,
+            "status": status,
+            "success": status in {"success", "read"},
             "active_rule": active.get("id") if active else None,
         }
         current["tool_events"].append(deepcopy(event))
@@ -113,6 +117,7 @@ def _tool_result(
             "tool": name if isinstance(name, str) else "unknown",
             "fields": [field for field in fields if isinstance(field, str)],
             "outcomes": [],
+            "status": "rejected",
             "success": False,
             "active_rule": _active_rule_id(current, rules),
         }
@@ -131,110 +136,192 @@ def _tool_result(
 def _active_rule_id(state: dict[str, Any], rules: list[dict[str, Any]]) -> str | None:
     context = get_journey_context(state, rules)
     active = context["active_requirement"]
-    return act…2494 tokens truncated… helper.")),
-    ])
-    original = initialize_scenario()
-    result = run_manager_turn(original, "I consent and want 150000.", model_config(), client)
-    assert result["reply"] == "Consent and amount were accepted by the demo helper."
-    assert result["error"] is None
-    assert result["state"]["accepted_values"] == {"consent": True, "loan_amount": 150000}
-    assert original["accepted_values"] == {}
-    assert result["tool_events"][0]["success"] is True
-    assert result["tool_events"][0]["active_rule"] == "BR-03"
-    second_messages = client.requests[1]["messages"]
-    assert second_messages[-1]["role"] == "tool"
-    assert second_messages[-1]["tool_call_id"] == "call-1"
-    assert json.loads(second_messages[-1]["content"])["committed_fields"] == ["consent", "loan_amount"]
-    assert second_messages[-2]["role"] == "assistant"
-    assert second_messages[-2]["tool_calls"][0]["id"] == "call-1"
+    return active["id"] if active else None
 
 
-def test_clarification_turn_does_not_mutate_application_values():
-    client = SequenceClient([completion(assistant_message("The configured rule lists the allowed options."))])
-    state = initialize_scenario("Monthly income pending")
-    result = run_manager_turn(state, "Why is monthly income needed?", model_config(), client)
-    assert result["reply"] == "The configured rule lists the allowed options."
-    assert result["state"]["accepted_values"] == state["accepted_values"]
-    assert result["state"]["pending_values"] == {}
-    assert result["state"]["tool_events"] == []
+def _helper_outcome_summary(outcomes: list[dict[str, Any]], state: dict[str, Any], rules: list[dict[str, Any]]) -> str:
+    labels = {rule["field"]: rule["label"] for rule in rules}
+    groups: dict[str, list[str]] = {}
+    for outcome in outcomes:
+        field = outcome.get("field")
+        status = outcome.get("status", "failed")
+        display = labels.get(field, field or "tool request")
+        groups.setdefault(status, []).append(display)
+    parts = []
+    for status, verb in (
+        ("accepted", "accepted"), ("staged", "staged"),
+        ("invalid", "rejected"), ("missing_prerequisite", "blocked by a prerequisite"),
+        ("unknown_field", "not recognized"), ("already_completed", "already completed and unchanged"),
+    ):
+        if groups.get(status):
+            parts.append(f"{verb}: {', '.join(groups[status])}")
+    active = _active_rule_id(state, rules)
+    active_label = next((rule["label"] for rule in rules if rule["id"] == active), None)
+    summary = "; ".join(parts) or "the helper could not process the request"
+    if active_label:
+        summary += f". Current requirement: {active_label}."
+    else:
+        summary += ". The fictional journey is complete."
+    return summary
 
 
-def test_unknown_tool_gets_correlated_error_and_does_not_mutate_state():
-    client = SequenceClient([
-        completion(assistant_message(calls=[tool_call("invented_tool", "{}", "call-unknown")])),
-        completion(assistant_message("I could not run that operation.")),
-    ])
-    result = run_manager_turn(initialize_scenario(), "Please save this.", model_config(), client)
-    tool_message = client.requests[1]["messages"][-1]
-    assert tool_message["tool_call_id"] == "call-unknown"
-    assert json.loads(tool_message["content"])["ok"] is False
-    assert result["state"]["accepted_values"] == {}
+def _is_refusal(message: str) -> bool:
+    text = message.casefold()
+    return any(phrase in text for phrase in (
+        "i don't want to", "i do not want to", "don't want to share", "do not want to share",
+        "don't want to give", "do not want to give", "rather not", "prefer not to",
+        "i refuse", "no, i won't", "no i won't", "not comfortable sharing", "not comfortable giving",
+    ))
 
 
-def test_invalid_tool_outcome_cannot_be_overridden_by_false_model_success():
-    invalid_submit = {"entries": [{"field": "consent", "value": False}]}
-    client = SequenceClient([
-        completion(assistant_message(calls=[tool_call("submit_information", json.dumps(invalid_submit))])),
-        completion(assistant_message("Your consent was saved and the journey advanced.")),
-    ])
-    result = run_manager_turn(initialize_scenario(), "No, not really.", model_config(), client)
-    assert result["reply"] != "Your consent was saved and the journey advanced."
-    assert "rejected: Explicit customer consent" in result["reply"]
-    assert "Current requirement: Explicit customer consent" in result["reply"]
-    assert result["state"]["accepted_values"] == {}
-    assert result["tool_events"][0]["success"] is False
+def _refusal_response(state: dict[str, Any], rules: list[dict[str, Any]]) -> str:
+    active = _active_rule_id(state, rules)
+    label = next((rule["label"] for rule in rules if rule["id"] == active), "")
+    return (
+        f"Understood. I won't record a value. We can stop, answer a question, or continue later. "
+        f"This required fictional field remains incomplete{f' ({label})' if label else ''}."
+    )
 
 
-def test_malformed_tool_arguments_cannot_mutate_state_or_claim_success():
-    client = SequenceClient([
-        completion(assistant_message(calls=[tool_call("submit_information", "{bad json")])),
-        completion(assistant_message("The request was rejected.")),
-    ])
-    result = run_manager_turn(initialize_scenario(), "Consent yes.", model_config(), client)
-    assert json.loads(client.requests[1]["messages"][-1]["content"])["ok"] is False
-    assert result["state"]["accepted_values"] == {}
+def _has_unsupported_save_claim(reply: str) -> bool:
+    return bool(re.search(r"\b(?:saved|recorded|stored|submitted)\b", reply, re.IGNORECASE))
 
 
-def test_missing_tool_arguments_are_returned_to_model_as_failure():
-    client = SequenceClient([
-        completion(assistant_message(calls=[tool_call("submit_information", None)])),
-        completion(assistant_message("The helper could not process the request.")),
-    ])
-    result = run_manager_turn(initialize_scenario(), "Yes", model_config(), client)
-    tool_result = json.loads(client.requests[1]["messages"][-1]["content"])
-    assert tool_result["ok"] is False
-    assert tool_result["committed_fields"] == []
-    assert tool_result["active_requirement"]["field"] == "consent"
-    assert result["state"]["accepted_values"] == {}
+def _assistant_tool_message(message: Any, calls: list[Any]) -> dict[str, Any]:
+    serialized = {
+        "role": "assistant",
+        "content": _read(message, "content"),
+        "tool_calls": [],
+    }
+    for call in calls:
+        function = _read(call, "function", {})
+        serialized["tool_calls"].append({
+            "id": _read(call, "id"),
+            "type": "function",
+            "function": {
+                "name": _read(function, "name") if isinstance(_read(function, "name"), str) else "unknown",
+                "arguments": (
+                    _read(function, "arguments")
+                    if isinstance(_read(function, "arguments"), str)
+                    else json.dumps(_read(function, "arguments"))
+                    if isinstance(_read(function, "arguments"), (dict, list))
+                    else "{}"
+                ),
+            },
+        })
+    return serialized
 
 
-def test_empty_assistant_response_is_never_a_fake_success():
-    client = SequenceClient([completion(assistant_message("  "))])
-    result = run_manager_turn(initialize_scenario(), "Hi", model_config(), client)
-    assert result["reply"] is None
-    assert result["error"] == "The model returned an empty response."
-    assert result["state"]["accepted_values"] == {}
+def run_manager_turn(
+    state: dict[str, Any],
+    user_message: str,
+    config: ModelConfig,
+    client: Any = None,
+    *,
+    max_tool_rounds: int = DEFAULT_MAX_TOOL_ROUNDS,
+) -> dict[str, Any]:
+    """Run a bounded tool-call loop; only helper-returned state is committed."""
+    rules = load_rules()
+    current = validate_journey_state(state, rules)
+    current["messages"].append({"role": "user", "content": user_message})
+    transcript = list(current["messages"][:-1])
+    messages = build_manager_messages(current, user_message, transcript)
+    tools = get_tool_definitions(rules)
+    if max_tool_rounds < 0:
+        raise ValueError("max_tool_rounds cannot be negative.")
 
+    rounds = 0
+    helper_outcomes: list[dict[str, Any]] = []
+    helper_operation_failed = False
+    while True:
+        try:
+            response = create_completion(messages, config, client, tools=tools, tool_choice="auto")
+        except ModelError as exc:
+            reply = _helper_outcome_summary(helper_outcomes, current, rules) if helper_outcomes else None
+            if reply:
+                reply += " The follow-up response could not be generated; no retry was attempted."
+                current["messages"].append({"role": "assistant", "content": reply})
+            return {"state": current, "reply": reply, "error": str(exc), "tool_events": current["tool_events"]}
+        try:
+            response_message = response.choices[0].message
+        except (AttributeError, IndexError, KeyError, TypeError):
+            return {
+                "state": current, "reply": None,
+                "error": "The model returned an unreadable response.",
+                "tool_events": current["tool_events"],
+            }
+        calls = _read(response_message, "tool_calls", None) or []
+        if not calls:
+            reply = _read(response_message, "content")
+            if not isinstance(reply, str) or not reply.strip():
+                return {
+                    "state": current, "reply": None,
+                    "error": "The model returned an empty response.",
+                    "tool_events": current["tool_events"],
+                }
+            reply = reply.strip()
+            if _is_refusal(user_message):
+                reply = _refusal_response(current, rules)
+            elif helper_operation_failed:
+                reply = _helper_outcome_summary(helper_outcomes, current, rules)
+            elif not helper_outcomes and _has_unsupported_save_claim(reply):
+                active = _active_rule_id(current, rules)
+                label = next((rule["label"] for rule in rules if rule["id"] == active), None)
+                reply = "I didn't save any new information in this turn."
+                if label:
+                    reply += f" The current required fictional field remains {label}."
+            current["messages"].append({"role": "assistant", "content": reply})
+            return {"state": current, "reply": reply, "error": None, "tool_events": current["tool_events"]}
 
-def test_missing_tool_call_id_stops_without_running_helper():
-    client = SequenceClient([completion(assistant_message(calls=[tool_call("get_journey_context", "{}", None)]))])
-    result = run_manager_turn(initialize_scenario(), "What is next?", model_config(), client)
-    assert result["error"] and "identifier" in result["error"]
-    assert result["state"]["tool_events"] == []
-
-
-def test_tool_loop_is_bounded():
-    context_call = completion(assistant_message(calls=[tool_call("get_journey_context", "{}")]))
-    client = SequenceClient([context_call, context_call])
-    result = run_manager_turn(initialize_scenario(), "Check progress", model_config(), client, max_tool_rounds=1)
-    assert result["error"] and "tool-call limit" in result["error"]
-    assert len(client.requests) == 2
-    assert len(result["state"]["tool_events"]) == 1
-
-
-def test_api_failure_returns_safe_error_and_preserves_values():
-    client = SequenceClient([TimeoutError("secret should not appear")])
-    state = initialize_scenario()
-    result = run_manager_turn(state, "Yes", model_config(), client)
-    assert result["error"] == "The model request timed out. Please try again."
-    assert result["state"]["accepted_values"] == {}
+        if rounds >= max_tool_rounds:
+            return {
+                "state": current, "reply": None,
+                "error": "The model reached the tool-call limit for this turn. No further tools were run.",
+                "tool_events": current["tool_events"],
+            }
+        messages.append(_assistant_tool_message(response_message, calls))
+        for call in calls:
+            call_id = _read(call, "id")
+            function = _read(call, "function", {})
+            name = _read(function, "name")
+            arguments = _read(function, "arguments")
+            if not isinstance(call_id, str) or not call_id:
+                return {
+                    "state": current, "reply": None,
+                    "error": "The model returned a tool call without an identifier. No tool was run.",
+                    "tool_events": current["tool_events"],
+                }
+            if _is_refusal(user_message) and name == "submit_information":
+                try:
+                    requested = json.loads(arguments) if isinstance(arguments, str) else {}
+                    entries = requested.get("entries", []) if isinstance(requested, dict) else []
+                except (TypeError, ValueError):
+                    entries = []
+                fields = [entry.get("field") for entry in entries if isinstance(entry, dict)]
+                result = {
+                    "ok": False, "error": "No information was submitted because the customer declined.",
+                    "outcomes": [{"field": field, "status": "declined"} for field in fields],
+                    "committed_fields": [], "active_requirement": get_journey_context(current, rules)["active_requirement"],
+                    "journey_complete": _active_rule_id(current, rules) is None,
+                    "tool_call_id": call_id,
+                }
+                event = {
+                    "tool": name, "fields": [field for field in fields if isinstance(field, str)],
+                    "outcomes": [{"field": field, "status": "declined"} for field in fields],
+                    "status": "rejected", "success": False,
+                    "active_rule": _active_rule_id(current, rules),
+                }
+                current["tool_events"].append(deepcopy(event))
+            else:
+                current, result, _event = _tool_result(name, arguments, call_id, current, rules)
+            if not result.get("ok"):
+                helper_operation_failed = True
+            helper_outcomes.extend(result.get("outcomes", []))
+            if any(outcome.get("status") not in {"accepted", "staged"} for outcome in result.get("outcomes", [])):
+                helper_operation_failed = True
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+        rounds += 1
