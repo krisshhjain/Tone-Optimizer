@@ -455,4 +455,3 @@ def run_manager_turn(
                 "content": json.dumps(result, ensure_ascii=False),
             })
         rounds += 1
-
