@@ -2,6 +2,8 @@ from copy import deepcopy
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from core.manager import (
     DEFAULT_PROMPT_VERSION,
     PROMPT_PATHS,
@@ -99,6 +101,15 @@ def test_prompt_version_defaults_to_v0_and_v1_has_conversational_instruction_cat
         assert requirement.casefold() in v1_prompt.casefold()
     assert "few-shot" not in v1_prompt.casefold()
     assert "example dialogue" not in v1_prompt.casefold()
+
+
+def test_v1_prompt_requires_unambiguous_consent_and_contains_no_few_shot_dialogue():
+    prompt = PROMPT_PATHS["V1"].read_text(encoding="utf-8").casefold()
+    assert "explicit, unambiguous customer consent" in prompt
+    assert "asking you to start is not automatically consent" in prompt
+    assert "if their meaning is ambiguous, do not submit consent" in prompt
+    assert "python still validates the boolean value, but does not determine" in prompt
+    assert "approximately one to three concise sentences" in prompt
 
 
 def test_unknown_prompt_versions_are_rejected_without_arbitrary_paths():
@@ -239,8 +250,8 @@ def test_invalid_tool_outcome_cannot_be_overridden_by_false_model_success():
     ])
     result = run_manager_turn(initialize_scenario(), "No, not really.", model_config(), client)
     assert result["reply"] != "Your consent was saved and the journey advanced."
-    assert "rejected: Explicit customer consent" in result["reply"]
-    assert "Current requirement: Explicit customer consent" in result["reply"]
+    assert "clear affirmative confirmation" in result["reply"]
+    assert "next required item is Explicit customer consent" in result["reply"]
     assert result["state"]["accepted_values"] == {}
     assert result["tool_events"][0]["success"] is False
 
@@ -303,8 +314,57 @@ def test_api_failure_returns_safe_error_and_preserves_values():
 def test_unsupported_save_claim_without_submit_is_replaced():
     client = SequenceClient([completion(assistant_message("Your information was saved successfully."))])
     result = run_manager_turn(initialize_scenario(), "Hi", model_config(), client)
-    assert "didn't save any new information" in result["reply"]
+    assert "can't confirm that any new information was saved" in result["reply"]
     assert result["state"]["accepted_values"] == {}
+
+
+@pytest.mark.parametrize("reply", [
+    "Was my information recorded?",
+    "I have not saved anything in this turn.",
+    "The demo does not submit anything to a bank.",
+])
+def test_questions_and_negated_privacy_explanations_are_not_replaced(reply):
+    client = SequenceClient([completion(assistant_message(reply))])
+    result = run_manager_turn(initialize_scenario(), "Did you save it?", model_config(), client)
+    assert result["reply"] == reply
+
+
+def test_previously_accepted_employment_and_income_are_answered_from_state():
+    state = initialize_scenario("Document receipt pending")
+    reply = "Your employment and income have been saved in this fictional session, so you don't need to repeat them."
+    client = SequenceClient([completion(assistant_message(reply))])
+    result = run_manager_turn(
+        state,
+        "Wait, did you remember my employment and income, or do I need to tell you again?",
+        model_config(), client,
+    )
+    assert result["reply"] == reply
+    assert result["state"]["accepted_values"] == state["accepted_values"]
+    assert result["state"]["accepted_values"]["employment_type"] == "salaried"
+    assert result["state"]["accepted_values"]["monthly_income"] == 50000
+
+
+@pytest.mark.parametrize("version", ["V0", "V1"])
+def test_unsupported_affirmative_save_claim_is_blocked_for_both_prompt_versions(version):
+    client = SequenceClient([completion(assistant_message("Your information has been saved successfully."))])
+    result = run_manager_turn(
+        initialize_scenario(), "Hi", model_config(), client, prompt_version=version,
+    )
+    assert "can't confirm that any new information was saved" in result["reply"]
+    assert result["state"]["accepted_values"] == {}
+
+
+def test_claim_of_external_submission_is_blocked_even_after_session_update():
+    client = SequenceClient([
+        completion(assistant_message(calls=[tool_call("submit_information", json.dumps({"entries": [
+            {"field": "consent", "value": True},
+        ]}))])),
+        completion(assistant_message("Your consent was saved to the bank and submitted.")),
+    ])
+    result = run_manager_turn(initialize_scenario(), "Yes, I consent.", model_config(), client)
+    assert result["state"]["accepted_values"]["consent"] is True
+    assert "only the fictional session state" in result["reply"]
+    assert "no information was submitted to a bank" in result["reply"]
 
 
 def test_mixed_submission_reports_partial_and_exact_outcomes():
@@ -326,8 +386,63 @@ def test_mixed_submission_reports_partial_and_exact_outcomes():
         {"field": "loan_amount", "status": "accepted"},
         {"field": "tenure_months", "status": "invalid"},
     ]
-    assert "rejected: Tenure" in result["reply"]
+    assert "That tenure isn't one of the permitted demo options" in result["reply"]
+    assert "6, 12, 18, 24, 36 months" in result["reply"]
     assert result["state"]["accepted_values"] == {"consent": True, "loan_amount": 150000}
+
+
+def test_mixed_invalid_and_staged_results_are_reported_without_false_acceptance():
+    entries = [
+        {"field": "tenure_months", "value": 7},
+        {"field": "employment_type", "value": "self_employed"},
+        {"field": "monthly_income", "value": 62000},
+    ]
+    client = SequenceClient([
+        completion(assistant_message(calls=[tool_call(
+            "submit_information", json.dumps({"entries": entries}),
+        )])),
+        completion(assistant_message("Everything was accepted and saved.")),
+    ])
+    result = run_manager_turn(
+        initialize_scenario("Tenure pending"), "7 months, self-employed, income 62000.",
+        model_config(), client,
+    )
+    assert "That tenure isn't one of the permitted demo options" in result["reply"]
+    assert "staged Employment category, Monthly income" in result["reply"]
+    assert "accepted Employment category" not in result["reply"]
+    assert result["state"]["accepted_values"] == {"consent": True, "loan_amount": 150000}
+    assert result["state"]["pending_values"] == {
+        "employment_type": "self_employed", "monthly_income": 62000,
+    }
+
+
+def test_ambiguous_consent_does_not_advance_in_controlled_model_response():
+    client = SequenceClient([completion(assistant_message(
+        "Please confirm explicitly whether you consent to continue with this fictional demo."
+    ))])
+    result = run_manager_turn(
+        initialize_scenario(), "Theek hai, please start", model_config(), client,
+        prompt_version="V1",
+    )
+    assert result["reply"].startswith("Please confirm explicitly")
+    assert len(client.requests) == 1
+    assert not result["state"]["accepted_values"]
+    assert result["state"]["tool_events"] == []
+
+
+def test_clear_affirmative_consent_can_be_accepted_by_existing_helper():
+    client = SequenceClient([
+        completion(assistant_message(calls=[tool_call("submit_information", json.dumps({"entries": [
+            {"field": "consent", "value": True},
+        ]}))])),
+        completion(assistant_message("Thanks for confirming.")),
+    ])
+    result = run_manager_turn(
+        initialize_scenario(), "Yes, I consent to continue with this fictional demo.",
+        model_config(), client, prompt_version="V1",
+    )
+    assert result["state"]["accepted_values"]["consent"] is True
+    assert result["tool_events"][0]["outcomes"] == [{"field": "consent", "status": "accepted"}]
 
 
 def test_successful_commit_survives_followup_api_failure_without_retry():
@@ -341,7 +456,7 @@ def test_successful_commit_survives_followup_api_failure_without_retry():
     result = run_manager_turn(state, "24 months", model_config(), client)
     assert result["state"]["accepted_values"]["tenure_months"] == 24
     assert len(client.requests) == 2
-    assert result["reply"] and "accepted: Tenure" in result["reply"]
+    assert result["reply"] and "accepted Tenure" in result["reply"]
     assert "no retry" in result["reply"]
     assert "diagnostic" not in result["error"]
 
@@ -371,3 +486,4 @@ def test_refusal_blocks_model_proposed_state_change():
     assert result["state"]["pending_values"] == {}
     assert result["tool_events"][-1]["status"] == "rejected"
     assert result["reply"] and "stop, answer a question, or continue later" in result["reply"]
+
