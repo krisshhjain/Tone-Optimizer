@@ -172,6 +172,8 @@ def test_missing_tool_arguments_are_returned_to_model_as_failure():
     result = run_manager_turn(initialize_scenario(), "Yes", model_config(), client)
     tool_result = json.loads(client.requests[1]["messages"][-1]["content"])
     assert tool_result["ok"] is False
+    assert tool_result["committed_fields"] == []
+    assert tool_result["active_requirement"]["field"] == "consent"
     assert result["state"]["accepted_values"] == {}
 
 
@@ -205,3 +207,4 @@ def test_api_failure_returns_safe_error_and_preserves_values():
     result = run_manager_turn(state, "Yes", model_config(), client)
     assert result["error"] == "The model request timed out. Please try again."
     assert result["state"]["accepted_values"] == {}
+
