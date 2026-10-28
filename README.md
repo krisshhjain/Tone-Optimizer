@@ -145,4 +145,3 @@ V0 Phase 4 stabilized the baseline workflow and prepared reproducible evaluation
 - Automatically detected critical violations are expected-transition mismatch candidates. Semantic policy claims still need human review.
 - No live runs or human quality scores are claimed by this repository change unless actual run artifacts are produced and reviewed.
 - Session state is temporary application memory, not durable storage. Provider-side handling has not been independently verified.
-
