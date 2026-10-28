@@ -486,4 +486,3 @@ def test_refusal_blocks_model_proposed_state_change():
     assert result["state"]["pending_values"] == {}
     assert result["tool_events"][-1]["status"] == "rejected"
     assert result["reply"] and "stop, answer a question, or continue later" in result["reply"]
-
