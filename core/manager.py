@@ -270,23 +270,30 @@ def _has_unsupported_save_claim(
     reply: str,
     state: dict[str, Any] | None = None,
     rules: list[dict[str, Any]] | None = None,
+    helper_outcomes: list[dict[str, Any]] | None = None,
 ) -> bool:
-    """Return true only for an ungrounded affirmative claim that data was saved."""
+    """Block affirmative save claims unless the exact fields are helper-confirmed as accepted."""
     text = reply.strip()
-    if not text or "?" in text or not _AFFIRMATIVE_SAVE_CLAIM.search(text):
+    if not text:
         return False
-    # A direct negation is an explanation that nothing was saved, not a success claim.
-    if re.search(r"\b(?:not|never|n't|no)\b.{0,35}\b(?:saved|recorded|stored|submitted)\b", text, re.IGNORECASE):
-        return False
-    # The helper confirms only fictional session state, never external submission or storage.
-    if re.search(r"\bsubmitted\b|\b(?:to|into)\s+(?:the\s+)?(?:bank|database|loan application)\b", text, re.IGNORECASE):
-        return True
 
-    if state is None or rules is None:
-        return True
-    accepted = state.get("accepted_values", {})
-    pending = state.get("pending_values", {})
-    mentioned: list[str] = []
+    negation = re.compile(
+        r"\b(?:no|not|never|(?:did|do|does|have|has|had|is|are|was|were|will|would|can|could|should)n['’]t)\b",
+        re.IGNORECASE,
+    )
+    boundaries = list(re.finditer(r"[.!?;,\n]|\b(?:but|however|yet)\b", text, re.IGNORECASE))
+
+    def clause_before(position: int) -> str:
+        start = max((item.end() for item in boundaries if item.end() <= position), default=0)
+        return text[start:position]
+
+    def sentence_after(position: int) -> tuple[str, str | None]:
+        end = re.search(r"[.!?;\n]", text[position:])
+        if not end:
+            return text[position:], None
+        boundary = text[position + end.start()]
+        return text[position:position + end.start()], boundary
+
     aliases = {
         "employment_type": ("employment", "employment type", "job category"),
         "monthly_income": ("income", "monthly income"),
@@ -295,16 +302,57 @@ def _has_unsupported_save_claim(
         "consent": ("consent",),
         "demo_pan_receipt": ("receipt confirmation", "document receipt", "demo pan receipt"),
     }
-    for rule in rules:
-        terms = (rule.get("label", "").casefold(), *aliases.get(rule.get("field"), ()), rule.get("field", "").replace("_", " "))
-        if any(term and re.search(rf"\b{re.escape(term)}\b", text, re.IGNORECASE) for term in terms):
-            mentioned.append(rule["field"])
-    if mentioned:
-        return not all(field in accepted or field in pending for field in mentioned)
-    # Unqualified claims may refer to already retained values; claims about everything require a complete state.
-    if re.search(r"\b(?:all|everything)\b", text, re.IGNORECASE):
-        return any(rule["field"] not in accepted and rule["field"] not in pending for rule in rules)
-    return not bool(accepted or pending)
+    accepted = state.get("accepted_values", {}) if state else {}
+    pending = state.get("pending_values", {}) if state else {}
+    current_accepted = {
+        outcome.get("field") for outcome in (helper_outcomes or [])
+        if outcome.get("status") == "accepted"
+    }
+
+    for claim in _AFFIRMATIVE_SAVE_CLAIM.finditer(text):
+        prefix = clause_before(claim.start())
+        if negation.search(prefix):
+            continue
+
+        tail, sentence_ending = sentence_after(claim.end())
+        # A question about one save claim must not hide a separate claim in another sentence.
+        if sentence_ending == "?":
+            continue
+        clause_tail = re.split(
+            r"[.!?;,\n]|\b(?:but|however|yet)\b", tail, maxsplit=1, flags=re.IGNORECASE,
+        )[0]
+        claim_text = text[claim.start():claim.end()] + clause_tail
+        if re.search(
+            r"\bsubmitted\b|\b(?:to|into)\s+(?:the\s+)?(?:bank|database|loan application)\b",
+            claim_text,
+            re.IGNORECASE,
+        ):
+            return True
+
+        if state is None or rules is None:
+            return True
+        mentioned: list[str] = []
+        for rule in rules:
+            field = rule.get("field", "")
+            terms = (rule.get("label", "").casefold(), *aliases.get(field, ()), field.replace("_", " "))
+            if any(term and re.search(rf"\b{re.escape(term)}\b", claim_text, re.IGNORECASE) for term in terms):
+                mentioned.append(field)
+
+        # A generic "your information" claim is not proven by some unrelated older field.
+        if not mentioned:
+            return True
+        if not all(field in accepted for field in mentioned):
+            return True
+
+        novelty = re.search(r"\b(?:new|just now|this turn|this time|today)\b", claim_text, re.IGNORECASE)
+        if novelty and not all(field in current_accepted for field in mentioned):
+            return True
+
+        # A staged value is present in session state but is not complete or customer-facingly "saved".
+        if any(field in pending for field in mentioned):
+            return True
+
+    return False
 
 
 def _assistant_tool_message(message: Any, calls: list[Any]) -> dict[str, Any]:
@@ -391,9 +439,10 @@ def run_manager_turn(
                 reply = _helper_outcome_summary(
                     helper_outcomes, current, rules, operation_failed=helper_operation_failed,
                 )
-            elif _has_unsupported_save_claim(reply, current, rules):
+            elif _has_unsupported_save_claim(reply, current, rules, helper_outcomes):
                 if helper_outcomes:
-                    reply = "The helper confirms only the fictional session state; no information was submitted to a bank."
+                    reply = _helper_outcome_summary(helper_outcomes, current, rules)
+                    reply += " No information was submitted to a bank."
                 else:
                     active = _active_rule_id(current, rules)
                     label = next((rule["label"] for rule in rules if rule["id"] == active), None)
