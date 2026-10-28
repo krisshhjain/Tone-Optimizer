@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import json
 import subprocess
 import sys
@@ -22,6 +23,7 @@ from core.manager import run_manager_turn
 from core.model_client import GenerationSettings, ModelConfig, ModelError
 from core.rules import load_rules
 from core.state import initialize_scenario
+from scripts.safe_paths import UnsafePathError, ensure_directory, safe_write_text
 
 SCENARIOS_PATH = ROOT / "evaluation" / "scenarios.json"
 PROMPT_PATH = ROOT / "prompts" / "v0_orchestration.md"
@@ -193,18 +195,18 @@ def _write_rating_template(
     path: Path, scenarios: list[dict[str, Any]] | None = None,
     run_id: str = "", model_id: str = "",
 ) -> None:
-    fields = ["run_id", "scenario_id", "prompt_version", "model_id", "reviewer_id", *RATING_FIELDS,
-              "critical_violations", "reviewer_notes"]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        with path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fields)
-            writer.writeheader()
-            for scenario in scenarios or []:
-                writer.writerow({
-                    "run_id": run_id, "scenario_id": scenario["id"],
-                    "prompt_version": "V0", "model_id": model_id,
-                })
+    fields = ["run_id", "scenario_id", "turn", "prompt_version", "model_id", "reviewer_id",
+              *RATING_FIELDS, "critical_violations", "reviewer_notes"]
+    stream = io.StringIO(newline="")
+    writer = csv.DictWriter(stream, fieldnames=fields)
+    writer.writeheader()
+    for scenario in scenarios or []:
+        for index, _turn in enumerate(scenario["turns"], start=1):
+            writer.writerow({
+                "run_id": run_id, "scenario_id": scenario["id"], "turn": index,
+                "prompt_version": "V0", "model_id": model_id,
+            })
+    safe_write_text(path, stream.getvalue())
 
 
 def _load_scenarios() -> list[dict[str, Any]]:
@@ -242,6 +244,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.max_live_requests < 1:
         parser.error("--max-live-requests must be at least 1")
+    try:
+        output_dir = ensure_directory(args.output_dir, create=True)
+    except (UnsafePathError, OSError) as exc:
+        print(f"Unsafe or unavailable evaluation output directory: {exc}", file=sys.stderr)
+        return 2
 
     scenarios = _load_scenarios()
     expected_prompt_hash = PROMPT_HASH_PATH.read_text(encoding="utf-8").split()[0]
@@ -298,16 +305,21 @@ def main(argv: list[str] | None = None) -> int:
                 "initial_preset": scenario["starting_preset"], "turn": row["turn"],
                 **{key: value for key, value in row.items() if key != "turn"},
             })
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    jsonl_path = args.output_dir / f"{run_id}.jsonl"
-    with jsonl_path.open("w", encoding="utf-8") as handle:
-        for row in all_turns:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-    summary_path = args.output_dir / f"{run_id}.json"
-    summary_path.write_text(json.dumps({**metadata, "runs": summaries}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    _write_rating_template(
-        args.output_dir / f"{run_id}_ratings.csv", scenarios, run_id, config.model,
-    )
+    jsonl_path = output_dir / f"{run_id}.jsonl"
+    jsonl_content = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in all_turns)
+    summary_path = output_dir / f"{run_id}.json"
+    try:
+        safe_write_text(jsonl_path, jsonl_content)
+        safe_write_text(
+            summary_path,
+            json.dumps({**metadata, "runs": summaries}, ensure_ascii=False, indent=2) + "\n",
+        )
+        _write_rating_template(
+            output_dir / f"{run_id}_ratings.csv", scenarios, run_id, config.model,
+        )
+    except (UnsafePathError, OSError) as exc:
+        print(f"Could not safely write evaluation results: {exc}", file=sys.stderr)
+        return 2
     print(f"Mode: {mode}; scenarios: {len(summaries)}; turn records: {len(all_turns)}")
     print(f"Turn data: {jsonl_path}")
     print(f"Run metadata and final states: {summary_path}")

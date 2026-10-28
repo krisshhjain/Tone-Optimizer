@@ -88,7 +88,7 @@ The JSONL/JSON outputs record UTC timestamp, run/scenario IDs, V0 prompt and rul
 
 ### Human ratings and report
 
-Read `evaluation/rubric.md` before scoring. Enter integer scores 1–5 in the six dimension columns; leave unrateable or missing scores blank, never zero. Record reviewer ID, critical workflow violations separately, and brief evidence in reviewer notes. The blank template is `evaluation/human_ratings_template.csv`; each run also creates a run-specific blank copy. For a second rater, make a separate copy and use a different reviewer ID.
+Read `evaluation/rubric.md` before scoring. The blank template and each run-specific rating sheet have one row per customer turn, keyed by `run_id`, `scenario_id`, and `turn`. Enter integer scores 1–5 in the six dimension columns; leave unrateable or missing scores blank, never zero. Record reviewer ID, critical workflow violations separately, and brief evidence in reviewer notes. For a second rater, make a separate copy and use a different reviewer ID. The summarizer joins ratings to the exact turn and response, reports reviewer-specific and combined averages, and counts unmatched rows without scoring them.
 
 Generate a summary from recorded runs and any completed rating sheets:
 
@@ -98,6 +98,8 @@ python scripts/summarize_v0_evaluation.py --results-dir path/to/output --ratings
 ```
 
 The report shows run success/failure, expected state/tool transition rates, candidate critical violations, mean/median recorded latency, human rating averages by dimension/category/language, and real response excerpts from saved outputs. Empty score columns display as **Not rated**. It does not ask a model to evaluate quality or create human scores. Critical-transition candidates are deterministic mismatch checks and are not a complete semantic audit of prose.
+
+Paths supplied with `--output-dir`, `--results-dir`, `--ratings`, or `--output` are validated. Parent-directory traversal and symlink/reparse-point components are rejected; explicitly selected absolute locations outside the repository are allowed when they are ordinary directories/files.
 
 ## Manual live checks
 
