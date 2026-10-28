@@ -1,0 +1,8 @@
+[
+  {"id":"BR-01","field":"consent","order":1,"label":"Explicit customer consent","question":"Do you consent to continue with this fictional demo?","required":true,"validation":{"type":"boolean","must_be_true":true}},
+  {"id":"BR-02","field":"loan_amount","order":2,"label":"Loan amount (fictional INR bounds)","question":"Choose a demo loan amount between INR 10,000 and INR 500,000.","required":true,"validation":{"type":"integer","minimum":10000,"maximum":500000}},
+  {"id":"BR-03","field":"tenure_months","order":3,"label":"Tenure","question":"Choose a demo tenure of 6, 12, 18, 24, or 36 months.","required":true,"validation":{"type":"integer","allowed":[6,12,18,24,36]}},
+  {"id":"BR-04","field":"employment_type","order":4,"label":"Employment category","question":"Select salaried, self-employed, or other for this demo.","required":true,"validation":{"type":"choice","allowed":["salaried","self_employed","other"]}},
+  {"id":"BR-05","field":"monthly_income","order":5,"label":"Monthly income (demo only)","question":"Enter a positive whole-number demo monthly income.","required":true,"validation":{"type":"integer","minimum":1}},
+  {"id":"BR-06","field":"demo_pan_receipt","order":6,"label":"Synthetic PAN receipt confirmation","question":"Confirm the fictional demo receipt flag (no document is collected).","required":true,"validation":{"type":"boolean","must_be_true":true}}
+]
