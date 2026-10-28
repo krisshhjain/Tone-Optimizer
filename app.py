@@ -2,13 +2,16 @@
 
 import streamlit as st
 
-from core.manager import run_manager_turn
+from core.manager import PROMPT_PATHS, run_manager_turn
 from core.model_client import ModelConfig, ModelError
 from core.rules import load_rules
 from core.state import PRESETS, active_rule, initialize_scenario, rule_statuses, validate_journey_state
 
-st.set_page_config(page_title="Tone Optimizer — V0 Foundation", page_icon="🧪")
-st.title("Tone Optimizer — V0 Foundation")
+st.set_page_config(page_title="Tone Optimizer — V0/V1 Foundation", page_icon="🧪")
+if st.session_state.get("manager_version") not in PROMPT_PATHS:
+    st.session_state.manager_version = "V0"
+
+st.title("Tone Optimizer — V0/V1 Foundation")
 st.warning(
     "Fictional demo data only. Never enter real customer information, identity details,"
     " PAN or Aadhaar numbers, document images, or banking information."
@@ -28,6 +31,23 @@ else:
         st.stop()
 
 with st.sidebar:
+    st.subheader("Manager Version")
+    selected_version = st.selectbox(
+        "Manager Version",
+        options=list(PROMPT_PATHS),
+        format_func=lambda version: {
+            "V0": "V0 — Baseline", "V1": "V1 — Conversational",
+        }[version],
+        index=list(PROMPT_PATHS).index(st.session_state.manager_version),
+        key="manager_version_selector",
+    )
+    if selected_version != st.session_state.manager_version:
+        st.session_state.manager_version = selected_version
+        selected_scenario = st.session_state.journey["scenario"]
+        st.session_state.journey = initialize_scenario(selected_scenario, rules)
+        st.session_state.pop("turn_error", None)
+        st.rerun()
+
     st.subheader("Scenario")
     scenario_names = list(PRESETS)
     selected_scenario = st.selectbox(
@@ -45,7 +65,10 @@ with st.sidebar:
         st.rerun()
 
 journey = st.session_state.journey
-st.caption(f"Selected scenario: **{journey['scenario']}** · Session state is temporary.")
+st.caption(
+    f"Manager Version: **{st.session_state.manager_version}** · "
+    f"Selected scenario: **{journey['scenario']}** · Session state is temporary."
+)
 current_rule = active_rule(journey["accepted_values"], rules)
 st.subheader("Current required field")
 if current_rule:
@@ -105,7 +128,10 @@ if model_config is not None:
 submitted = st.chat_input("Message about this fictional demo", disabled=model_config is None)
 if submitted and model_config is not None:
     with st.spinner("Waiting for Nemotron and the deterministic helper..."):
-        result = run_manager_turn(journey, submitted, model_config)
+        result = run_manager_turn(
+            journey, submitted, model_config,
+            prompt_version=st.session_state.manager_version,
+        )
     st.session_state.journey = result["state"]
     if result["error"]:
         st.session_state.turn_error = result["error"]

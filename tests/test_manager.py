@@ -2,9 +2,16 @@ from copy import deepcopy
 import json
 from types import SimpleNamespace
 
-from core.manager import build_manager_messages
-from core.manager import run_manager_turn
+from core.manager import (
+    DEFAULT_PROMPT_VERSION,
+    PROMPT_PATHS,
+    build_manager_messages,
+    resolve_prompt_path,
+    run_manager_turn,
+)
+from core.business_rule_helper import get_tool_definitions
 from core.model_client import GenerationSettings, ModelConfig
+from core.rules import load_rules
 from core.state import initialize_scenario
 
 
@@ -62,6 +69,62 @@ def test_v0_prompt_limits_rationales_to_configured_rules():
     assert "No real loan application is created" in prompt
     assert "no permanent database is used" in prompt
     assert "If the customer declines" in prompt
+
+
+def test_prompt_version_defaults_to_v0_and_v1_loads_its_allowlisted_prompt():
+    assert DEFAULT_PROMPT_VERSION == "V0"
+    assert resolve_prompt_path() == PROMPT_PATHS["V0"]
+    default_prompt = build_manager_messages(initialize_scenario(), "Hi")[0]["content"]
+    v1_prompt = build_manager_messages(
+        initialize_scenario(), "Hi", prompt_version="V1",
+    )[0]["content"]
+    assert default_prompt.startswith(PROMPT_PATHS["V0"].read_text(encoding="utf-8").strip())
+    assert v1_prompt.startswith("# V1 conversational prompt — under development")
+    assert "Do not invent eligibility" in v1_prompt
+    v1_file = PROMPT_PATHS["V1"].read_text(encoding="utf-8")
+    _, copied_instructions = v1_file.split("\n\n", maxsplit=1)
+    v0_file = PROMPT_PATHS["V0"].read_text(encoding="utf-8")
+    _, v0_instructions = v0_file.split("\n\n", maxsplit=1)
+    assert copied_instructions == v0_instructions
+
+
+def test_unknown_prompt_versions_are_rejected_without_arbitrary_paths():
+    import pytest
+
+    with pytest.raises(ValueError, match="Unsupported prompt version"):
+        build_manager_messages(initialize_scenario(), "Hi", prompt_version="../secrets")
+
+
+def test_both_prompt_versions_share_tools_rules_helper_and_selected_prompt_on_each_round():
+    class CaptureClient:
+        def __init__(self):
+            self.requests = []
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+        def create(self, **kwargs):
+            self.requests.append(kwargs)
+            if len(self.requests) == 1:
+                return completion(assistant_message(calls=[tool_call(
+                    "submit_information", json.dumps({"entries": [{"field": "consent", "value": True}]}),
+                )]))
+            return completion(assistant_message("The helper confirms consent."))
+
+    outcomes = []
+    for version in ("V0", "V1"):
+        client = CaptureClient()
+        result = run_manager_turn(
+            initialize_scenario(), "I consent.", model_config(), client,
+            prompt_version=version,
+        )
+        assert result["state"]["accepted_values"]["consent"] is True
+        assert len(client.requests) == 2
+        expected_prompt = PROMPT_PATHS[version].read_text(encoding="utf-8").strip()
+        assert all(request["messages"][0]["content"].startswith(expected_prompt) for request in client.requests)
+        outcomes.append((client.requests[0]["tools"], result["state"]["accepted_values"]))
+
+    assert outcomes[0] == outcomes[1]
+    assert len(load_rules()) == 6
+    assert outcomes[0][0] == get_tool_definitions(load_rules())
 
 
 def model_config():
