@@ -23,4 +23,3 @@ These cases assess actual model behavior; mocked tests cannot establish conversa
 - Refusal handling and helper-outcome summaries can replace model wording, so those turns do not isolate prompt tone.
 - Consent semantics remain the LLM's responsibility. The helper enforces a Boolean `true`, but does not verify whether the customer's natural-language intent was unambiguous. These controlled tests verify the desired model behavior, not a deterministic Python guarantee.
 - Do not describe mocked tests as Nemotron quality results. Do not claim a language or conversational improvement without reviewing live responses.
-
