@@ -76,8 +76,8 @@ python scripts/run_v0_evaluation.py --all
 Select a prompt version explicitly; omission defaults to V0. Each invocation evaluates one version only, and metadata plus rating rows identify the selected version and prompt hash:
 
 ```bash
-python scripts/run_v0_evaluation.py --prompt-version V0 --scenario-id V0-CL-04
-python scripts/run_v0_evaluation.py --prompt-version V1 --scenario-id V0-CL-04
+python scripts/run_v0_evaluation.py --prompt-version V0 --scenario-id V0-CL-04 --output-dir evaluation/results/V0
+python scripts/run_v0_evaluation.py --prompt-version V1 --scenario-id V0-CL-04 --output-dir evaluation/results/V1
 ```
 
 The runner checks the pinned V0 prompt hash on every run, including V1 runs, and records the actual selected prompt hash. Runs are kept separately labeled; the summarizer refuses to combine results that have different prompt versions or hashes. Use separate results directories when preparing reports for V0 and V1.
