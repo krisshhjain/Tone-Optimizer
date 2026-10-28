@@ -30,13 +30,20 @@ def build_manager_messages(
         "accepted_values": values,
         "active_rule": active,
         "recording_status": "not_connected_read_only",
+        "phase_constraints": [
+            "customer statements are not accepted, validated, or saved",
+            "do not move beyond the active rule",
+            "only explain purposes specified by configured rules",
+            "no unconfigured EMI, interest, underwriting, eligibility, DTI, or LTV claims",
+        ],
     }
     system_content = Path(prompt_path).read_text(encoding="utf-8").strip()
     system_content += (
         "\n\nAuthoritative current journey context (JSON):\n"
         + json.dumps(context, ensure_ascii=False, sort_keys=True)
-        + "\n\nThis phase is strictly read-only. Do not claim the latest message or any value was saved,"
-        " recorded, verified, or used to advance the journey. Do not modify state."
+        + "\n\nThis phase is strictly read-only. Treat the latest message as unrecorded. Do not claim any value was"
+        " accepted, validated, saved, recorded, verified, or used to advance the journey. Keep the active rule"
+        " unchanged, and do not invent reasons or calculations that are absent from the configured rules."
     )
     messages = [{"role": "system", "content": system_content}]
     for message in history or []:

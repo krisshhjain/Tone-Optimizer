@@ -21,6 +21,8 @@ def test_manager_injects_all_rules_state_active_rule_and_history():
     assert '"scenario": "Tenure pending"' in context
     assert '"field": "tenure_months"' in context
     assert '"recording_status": "not_connected_read_only"' in context
+    assert "do not move beyond the active rule" in context
+    assert "no unconfigured EMI" in context
     assert messages[1:] == [
         {"role": "user", "content": "Hello"},
         {"role": "assistant", "content": "Hi"},
@@ -45,3 +47,11 @@ def test_context_building_does_not_mutate_session_state():
     original = deepcopy(state)
     build_manager_messages(state, "My monthly income is 50000.")
     assert state == original
+
+
+def test_v0_prompt_limits_rationales_to_configured_rules():
+    messages = build_manager_messages(initialize_scenario(), "Why do you ask?")
+    prompt = messages[0]["content"]
+    assert "If a reason is not configured" in prompt
+    assert "Never invent interest rates, EMI calculations" in prompt
+    assert "Do not proceed to another rule" in prompt

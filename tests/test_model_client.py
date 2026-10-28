@@ -42,6 +42,10 @@ def test_successful_response_and_generation_metadata():
 
 
 def test_missing_api_key_is_handled_without_sdk_or_network(monkeypatch):
+    # A developer's real .env must not turn this offline test into a configured test.
+    import dotenv
+
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *args, **kwargs: False)
     monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
     monkeypatch.setenv("NVIDIA_BASE_URL", "https://example.invalid/v1")
     monkeypatch.setenv("NVIDIA_MODEL", "test-model")
