@@ -1,0 +1,1054 @@
+[
+  {
+    "id": "V0-NP-01",
+    "category": "normal_progression",
+    "description": "Accept explicit consent from a fresh application.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Yes, I consent to continue with this fictional demo.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-NP-02",
+    "category": "normal_progression",
+    "description": "Accept a valid tenure at the tenure step.",
+    "starting_preset": "Tenure pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Please set my fictional tenure to 18 months.",
+        "expected_active_field": "employment_type",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "tenure_months",
+            "value": 18
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 18
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-NP-03",
+    "category": "normal_progression",
+    "description": "Accept synthetic monthly income.",
+    "starting_preset": "Monthly income pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "My demo monthly income is 42000.",
+        "expected_active_field": "demo_pan_receipt",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "monthly_income",
+            "value": 42000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried",
+          "monthly_income": 42000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-NP-04",
+    "category": "normal_progression",
+    "description": "Confirm the synthetic receipt flag.",
+    "starting_preset": "Document receipt pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Yes, mark the fictional receipt flag as confirmed.",
+        "expected_active_field": null,
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "demo_pan_receipt",
+            "value": true
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried",
+          "monthly_income": 50000,
+          "demo_pan_receipt": true
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-NP-05",
+    "category": "normal_progression",
+    "description": "Progress through consent, amount, tenure, and employment in order.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "I consent, request 125000, choose 12 months, and am salaried.",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          },
+          {
+            "field": "loan_amount",
+            "value": 125000
+          },
+          {
+            "field": "tenure_months",
+            "value": 12
+          },
+          {
+            "field": "employment_type",
+            "value": "salaried"
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 125000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-CL-01",
+    "category": "clarification_questions",
+    "description": "Ask why the fictional amount is needed.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Why do you ask for a loan amount?",
+        "expected_active_field": "consent",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {},
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-CL-02",
+    "category": "clarification_questions",
+    "description": "Ask what tenure means in the demo.",
+    "starting_preset": "Tenure pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "What does tenure mean here?",
+        "expected_active_field": "tenure_months",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-CL-03",
+    "category": "clarification_questions",
+    "description": "Ask which employment options are configured.",
+    "starting_preset": "Monthly income pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Which employment categories can I choose?",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-CL-04",
+    "category": "clarification_questions",
+    "description": "Ask why the demo requests monthly income.",
+    "starting_preset": "Monthly income pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Monthly income kyun chahiye?",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-CL-05",
+    "category": "clarification_questions",
+    "description": "Ask whether a real document is collected.",
+    "starting_preset": "Document receipt pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Are you asking me to upload an actual document?",
+        "expected_active_field": "demo_pan_receipt",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried",
+          "monthly_income": 50000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-RP-01",
+    "category": "repetition_context",
+    "description": "Customer repeats an accepted amount.",
+    "starting_preset": "Tenure pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "The amount is 150000, as I said earlier.",
+        "expected_active_field": "tenure_months",
+        "expected_state_change": false,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "loan_amount",
+            "value": 150000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-RP-02",
+    "category": "repetition_context",
+    "description": "Customer asks what is still missing after amount acceptance.",
+    "starting_preset": "Tenure pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "I already gave the amount; what's still needed?",
+        "expected_active_field": "tenure_months",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-RP-03",
+    "category": "repetition_context",
+    "description": "Customer repeats an accepted employment category.",
+    "starting_preset": "Monthly income pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "I told you I'm salaried already.",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-RP-04",
+    "category": "repetition_context",
+    "description": "Customer asks for the next step after accepted amount and tenure.",
+    "starting_preset": "Monthly income pending",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "What is the next step after my 12-month tenure?",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-LG-01",
+    "category": "language_adaptation",
+    "description": "Synthetic English input for a configured journey step.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "I consent to continue with this demo.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-LG-02",
+    "category": "language_adaptation",
+    "description": "Synthetic Hindi input for a configured journey step.",
+    "starting_preset": "Tenure pending",
+    "language": "Hindi",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Mujhe 12 months ka tenure chahiye.",
+        "expected_active_field": "employment_type",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "tenure_months",
+            "value": 12
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-LG-03",
+    "category": "language_adaptation",
+    "description": "Synthetic Hinglish input for a configured journey step.",
+    "starting_preset": "Tenure pending",
+    "language": "Hinglish",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Amount 150000 rakhna, please.",
+        "expected_active_field": "tenure_months",
+        "expected_state_change": false,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "loan_amount",
+            "value": 150000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-LG-04",
+    "category": "language_adaptation",
+    "description": "Synthetic Hinglish input for a configured journey step.",
+    "starting_preset": "Monthly income pending",
+    "language": "Hinglish",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Self-employed ka matlab kya hai?",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "offline_entries": [],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-LG-05",
+    "category": "language_adaptation",
+    "description": "Synthetic Hindi input for a configured journey step.",
+    "starting_preset": "Document receipt pending",
+    "language": "Hindi",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "Haan, demo receipt flag confirm hai.",
+        "expected_active_field": null,
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "demo_pan_receipt",
+            "value": true
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried",
+          "monthly_income": 50000,
+          "demo_pan_receipt": true
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-IV-01",
+    "category": "invalid_values",
+    "description": "Amount below configured minimum.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Please use the invalid synthetic value.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          },
+          {
+            "field": "loan_amount",
+            "value": 1000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-IV-02",
+    "category": "invalid_values",
+    "description": "Amount above configured maximum.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Please use the invalid synthetic value.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          },
+          {
+            "field": "loan_amount",
+            "value": 600000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-IV-03",
+    "category": "invalid_values",
+    "description": "Unsupported seven-month tenure.",
+    "starting_preset": "Tenure pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Please use the invalid synthetic value.",
+        "expected_active_field": "tenure_months",
+        "expected_state_change": false,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "tenure_months",
+            "value": 7
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-IV-04",
+    "category": "invalid_values",
+    "description": "Zero is not a positive income.",
+    "starting_preset": "Monthly income pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Please use the invalid synthetic value.",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": false,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "monthly_income",
+            "value": 0
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-OO-01",
+    "category": "out_of_order",
+    "description": "Stage valid tenure before amount and do not count it completed.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "I consent and want 24 months.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          },
+          {
+            "field": "tenure_months",
+            "value": 24
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {
+          "tenure_months": 24
+        }
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-OO-02",
+    "category": "out_of_order",
+    "description": "Stage multiple future fields while keeping amount active.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "I consent, tenure 36 months, salaried, income 50000.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          },
+          {
+            "field": "tenure_months",
+            "value": 36
+          },
+          {
+            "field": "employment_type",
+            "value": "salaried"
+          },
+          {
+            "field": "monthly_income",
+            "value": 50000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {
+          "tenure_months": 36,
+          "employment_type": "salaried",
+          "monthly_income": 50000
+        }
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-OO-03",
+    "category": "out_of_order",
+    "description": "Promote staged tenure after the amount prerequisite succeeds.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "I consent and want 6 months.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          },
+          {
+            "field": "tenure_months",
+            "value": 6
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {
+          "tenure_months": 6
+        }
+      },
+      {
+        "message": "My fictional amount is 100000.",
+        "expected_active_field": "employment_type",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "loan_amount",
+            "value": 100000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 100000,
+          "tenure_months": 6
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-RF-01",
+    "category": "refusals_interruptions",
+    "description": "Customer declines to provide monthly income.",
+    "starting_preset": "Monthly income pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "I don't want to give my monthly income.",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-RF-02",
+    "category": "refusals_interruptions",
+    "description": "Customer declines synthetic receipt confirmation.",
+    "starting_preset": "Document receipt pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "I prefer not to confirm that flag.",
+        "expected_active_field": "demo_pan_receipt",
+        "expected_state_change": false,
+        "expected_tool": "no_state_changing_tool",
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 12,
+          "employment_type": "salaried",
+          "monthly_income": 50000
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-CP-01",
+    "category": "completion_failure",
+    "description": "Complete each fictional requirement in rule order.",
+    "starting_preset": "Fresh application",
+    "language": "English",
+    "requires_live_api": true,
+    "turns": [
+      {
+        "message": "I consent.",
+        "expected_active_field": "loan_amount",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "consent",
+            "value": true
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true
+        },
+        "expected_staged_values": {}
+      },
+      {
+        "message": "150000.",
+        "expected_active_field": "tenure_months",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "loan_amount",
+            "value": 150000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000
+        },
+        "expected_staged_values": {}
+      },
+      {
+        "message": "24 months.",
+        "expected_active_field": "employment_type",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "tenure_months",
+            "value": 24
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 24
+        },
+        "expected_staged_values": {}
+      },
+      {
+        "message": "Salaried.",
+        "expected_active_field": "monthly_income",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "employment_type",
+            "value": "salaried"
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 24,
+          "employment_type": "salaried"
+        },
+        "expected_staged_values": {}
+      },
+      {
+        "message": "Monthly demo income 45000.",
+        "expected_active_field": "demo_pan_receipt",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "monthly_income",
+            "value": 45000
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 24,
+          "employment_type": "salaried",
+          "monthly_income": 45000
+        },
+        "expected_staged_values": {}
+      },
+      {
+        "message": "Synthetic receipt confirmation yes.",
+        "expected_active_field": null,
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "demo_pan_receipt",
+            "value": true
+          }
+        ],
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 24,
+          "employment_type": "salaried",
+          "monthly_income": 45000,
+          "demo_pan_receipt": true
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  },
+  {
+    "id": "V0-CP-02",
+    "category": "completion_failure",
+    "description": "A follow-up API failure must not undo a helper commit.",
+    "starting_preset": "Tenure pending",
+    "language": "English",
+    "requires_live_api": false,
+    "turns": [
+      {
+        "message": "Set tenure to 18 months.",
+        "expected_active_field": "employment_type",
+        "expected_state_change": true,
+        "expected_tool": "submit_information",
+        "offline_entries": [
+          {
+            "field": "tenure_months",
+            "value": 18
+          }
+        ],
+        "offline_error_after_helper": true,
+        "expected_accepted_values": {
+          "consent": true,
+          "loan_amount": 150000,
+          "tenure_months": 18
+        },
+        "expected_staged_values": {}
+      }
+    ],
+    "critical_conditions": [
+      "Configured rule order is preserved",
+      "No invented banking policy or loan approval"
+    ]
+  }
+]

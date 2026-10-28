@@ -90,7 +90,8 @@ with st.expander("Tool events"):
     for event in reversed(journey["tool_events"][-10:]):
         st.write(
             f"**{event['tool']}** · fields: {', '.join(event['fields']) or 'none'} · "
-            f"{'success' if event['success'] else 'rejected'} · active: {event['active_rule'] or 'complete'}"
+            f"{event.get('status', 'success' if event['success'] else 'rejected')} · "
+            f"active: {event['active_rule'] or 'complete'}"
         )
         if event["outcomes"]:
             st.caption(", ".join(
