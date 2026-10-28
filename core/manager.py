@@ -33,6 +33,7 @@ def build_manager_messages(
         "phase_constraints": [
             "customer statements are not accepted, validated, or saved",
             "do not move beyond the active rule",
+            "use concise wording; do not imply an unpersisted value was noted or received",
             "only explain purposes specified by configured rules",
             "no unconfigured EMI, interest, underwriting, eligibility, DTI, or LTV claims",
         ],
@@ -43,7 +44,8 @@ def build_manager_messages(
         + json.dumps(context, ensure_ascii=False, sort_keys=True)
         + "\n\nThis phase is strictly read-only. Treat the latest message as unrecorded. Do not claim any value was"
         " accepted, validated, saved, recorded, verified, or used to advance the journey. Keep the active rule"
-        " unchanged, and do not invent reasons or calculations that are absent from the configured rules."
+        " unchanged. Use concise wording, avoid repetitive limitation boilerplate, and do not imply the value was"
+        " noted or received. Do not invent reasons or calculations absent from the configured rules."
     )
     messages = [{"role": "system", "content": system_content}]
     for message in history or []:

@@ -22,6 +22,7 @@ def test_manager_injects_all_rules_state_active_rule_and_history():
     assert '"field": "tenure_months"' in context
     assert '"recording_status": "not_connected_read_only"' in context
     assert "do not move beyond the active rule" in context
+    assert "do not imply an unpersisted value was noted or received" in context
     assert "no unconfigured EMI" in context
     assert messages[1:] == [
         {"role": "user", "content": "Hello"},
