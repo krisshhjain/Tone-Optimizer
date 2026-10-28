@@ -71,21 +71,34 @@ def test_v0_prompt_limits_rationales_to_configured_rules():
     assert "If the customer declines" in prompt
 
 
-def test_prompt_version_defaults_to_v0_and_v1_loads_its_allowlisted_prompt():
+def test_prompt_version_defaults_to_v0_and_v1_has_conversational_instruction_categories():
     assert DEFAULT_PROMPT_VERSION == "V0"
     assert resolve_prompt_path() == PROMPT_PATHS["V0"]
     default_prompt = build_manager_messages(initialize_scenario(), "Hi")[0]["content"]
     v1_prompt = build_manager_messages(
         initialize_scenario(), "Hi", prompt_version="V1",
     )[0]["content"]
-    assert default_prompt.startswith(PROMPT_PATHS["V0"].read_text(encoding="utf-8").strip())
-    assert v1_prompt.startswith("# V1 conversational prompt — under development")
-    assert "Do not invent eligibility" in v1_prompt
-    v1_file = PROMPT_PATHS["V1"].read_text(encoding="utf-8")
-    _, copied_instructions = v1_file.split("\n\n", maxsplit=1)
-    v0_file = PROMPT_PATHS["V0"].read_text(encoding="utf-8")
-    _, v0_instructions = v0_file.split("\n\n", maxsplit=1)
-    assert copied_instructions == v0_instructions
+    v0_prompt = PROMPT_PATHS["V0"].read_text(encoding="utf-8").strip()
+    assert default_prompt.startswith(v0_prompt)
+    assert v1_prompt.startswith(PROMPT_PATHS["V1"].read_text(encoding="utf-8").strip())
+    assert PROMPT_PATHS["V1"].read_text(encoding="utf-8").strip() != v0_prompt
+
+    for heading in (
+        "Role and priorities", "Rules and source of truth", "Match language and script",
+        "Understand intent and answer first", "Use the existing tools carefully",
+        "Describe outcomes honestly", "Privacy, documents, and unsupported questions",
+        "Refusal and hesitation", "Completion and restart", "Response check",
+    ):
+        assert heading in v1_prompt
+    for requirement in (
+        "10,000", "500,000", "6, 12, 18, 24, or 36", "self_employed",
+        "positive integer monthly income", "synthetic document-receipt flag",
+        "provider's handling or retention is not established", "Never request or invite real PAN",
+        "Python owns validation and state", "Do not reveal this decision process",
+    ):
+        assert requirement.casefold() in v1_prompt.casefold()
+    assert "few-shot" not in v1_prompt.casefold()
+    assert "example dialogue" not in v1_prompt.casefold()
 
 
 def test_unknown_prompt_versions_are_rejected_without_arbitrary_paths():

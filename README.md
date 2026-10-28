@@ -17,7 +17,7 @@ Synthetic entries can be retained temporarily in local Streamlit session state. 
 - `core/rules.py`, `config/pl_rules.json` — six ordered fictional rules and validation.
 - `core/state.py` — temporary accepted/staged state and presets. Only helper-validated values advance progress.
 - `prompts/v0_orchestration.md` — the pinned V0 baseline prompt.
-- `prompts/v1_conversational.md` — a V1 starting copy under development; it does not yet contain conversational optimization.
+- `prompts/v1_conversational.md` — V1's instruction-only conversational prompt; it uses no few-shot dialogue examples.
 - `evaluation/` — fixed synthetic scenarios, human rubric, blank rating sheet, and run instructions.
 - `scripts/run_v0_evaluation.py` — offline mock or explicitly opted-in live scenario runner that calls the existing Manager runtime.
 - `scripts/summarize_v0_evaluation.py` — Markdown summary from recorded runs and optional human ratings.
@@ -55,9 +55,9 @@ python -m streamlit run app.py
 
 ### Manager prompt versions
 
-V0 is the pinned baseline orchestration prompt. V1 is an under-development prompt file that currently starts as a faithful copy of V0, with a V1 heading. Select **V0 — Baseline** or **V1 — Conversational** in the Streamlit sidebar to choose which file the same Manager implementation sends to Nemotron. Switching versions resets the current conversation and synthetic journey to the selected preset so messages and accepted values from one prompt version cannot contaminate the other. Resetting within a version keeps that version selected.
+V0 is the pinned baseline orchestration prompt. V1 uses a separate, instruction-only prompt for language adaptation, answer-first responses, context-aware tool use, and accurate customer-facing outcome explanations. Select **V0 — Baseline** or **V1 — Conversational** in the Streamlit sidebar to choose which file the same Manager implementation sends to Nemotron. Switching versions resets the current conversation and synthetic journey to the selected preset so messages and accepted values from one prompt version cannot contaminate the other. Resetting within a version keeps that version selected.
 
-Phase 1 establishes prompt versioning only. It does not claim that V1 improves conversation quality. Both versions use the same Nemotron configuration and generation settings, the same two helper tools, the same six rules, and the same validation and state-transition logic. V1 prompt optimization is reserved for V1 Phase 2.
+V1 Phase 2 changes prompt instructions only. Both versions use the same Nemotron configuration and generation settings, the same two helper tools, the same six rules, and the same validation and state-transition logic. This prompt change is a hypothesis, not evidence that V1 improves conversation quality; compare actual responses using the rubric and manual checklist before drawing conclusions.
 
 ## Evaluation
 
@@ -128,16 +128,19 @@ Run these in the Streamlit app and record actual Nemotron replies, tool events, 
 5. **Full journey:** provide all six fictional fields in order. Expect helper-confirmed completion only; no approval claim.
 6. **Mixed values:** at an eligible state, submit one valid and one invalid field together. Expect accepted/rejected outcomes per field and a `partial` event where at least one operation succeeded.
 
+Use [`evaluation/v1_phase2_manual_checks.md`](evaluation/v1_phase2_manual_checks.md) for the twelve V1 language, context, privacy, refusal, and completion checks. It records expected helper/state behavior separately from the conversational improvement being evaluated. Use only fictional values and record actual live responses; offline fixtures are not model-quality evidence.
+
 ## Reproducibility and later comparisons
 
 The pinned V0 prompt SHA-256 is `69e6071c19c1ed66f48893bc79b33ad9078cb9244edb8d7562b435be27f42c99` (`prompts/v0_baseline.sha256`). The runner stops if the prompt file no longer matches this baseline. Every run records the prompt and rule hashes. Preserve scenario data, tool definitions, state-transition logic, initial presets, model, generation settings, and rubric when comparing versions. Later V1 and V2 experiments may be compared against these V0 outputs only after they are separately approved and implemented. A changed prompt or implementation is a distinct experiment; do not pool runs with different hashes as one baseline.
 
-V0 Phase 4 stabilized the baseline workflow and prepared reproducible evaluation. V1 Phase 1 establishes prompt version selection only; V1 conversational improvements, prompt comparisons, an LLM judge, dashboard, database, deployment, and additional services are not implemented here.
+V0 Phase 4 stabilized the baseline workflow and prepared reproducible evaluation. V1 Phase 2 changes only Manager instructions; it does not change the shared controller, add few-shot examples, compare prompt results automatically, add an LLM judge or dashboard, or introduce new services.
 
 ## Known limitations
 
 - Live Nemotron responses and structured-call behavior depend on the configured endpoint and model; offline results are workflow mocks, not model performance evidence.
 - The refusal and unsupported-save text safeguards are intentionally lightweight and phrase-based. They cover tested patterns, not every possible paraphrase or claim; helper state remains authoritative.
+- Shared Python response handling may replace model wording with a deterministic summary after rejected or partial helper outcomes, on refusals, or when the unsupported-save phrase check matches. These effects apply equally to V0 and V1 and can limit prompt-only improvements in naturalness.
 - Automatically detected critical violations are expected-transition mismatch candidates. Semantic policy claims still need human review.
 - No live runs or human quality scores are claimed by this repository change unless actual run artifacts are produced and reviewed.
 - Session state is temporary application memory, not durable storage. Provider-side handling has not been independently verified.
