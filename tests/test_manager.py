@@ -323,25 +323,61 @@ def test_unsupported_save_claim_without_submit_is_replaced():
     "I have not saved anything in this turn.",
     "The demo does not submit anything to a bank.",
 ])
-def test_questions_and_negated_privacy_explanations_are_not_replaced(reply):
+@pytest.mark.parametrize("version", ["V0", "V1"])
+def test_questions_and_negated_privacy_explanations_are_not_replaced(reply, version):
     client = SequenceClient([completion(assistant_message(reply))])
-    result = run_manager_turn(initialize_scenario(), "Did you save it?", model_config(), client)
+    result = run_manager_turn(
+        initialize_scenario(), "Did you save it?", model_config(), client, prompt_version=version,
+    )
     assert result["reply"] == reply
 
 
-def test_previously_accepted_employment_and_income_are_answered_from_state():
+@pytest.mark.parametrize("version", ["V0", "V1"])
+def test_previously_accepted_employment_and_income_are_answered_from_state(version):
     state = initialize_scenario("Document receipt pending")
     reply = "Your employment and income have been saved in this fictional session, so you don't need to repeat them."
     client = SequenceClient([completion(assistant_message(reply))])
     result = run_manager_turn(
         state,
         "Wait, did you remember my employment and income, or do I need to tell you again?",
-        model_config(), client,
+        model_config(), client, prompt_version=version,
     )
     assert result["reply"] == reply
     assert result["state"]["accepted_values"] == state["accepted_values"]
     assert result["state"]["accepted_values"]["employment_type"] == "salaried"
     assert result["state"]["accepted_values"]["monthly_income"] == 50000
+
+
+@pytest.mark.parametrize("version", ["V0", "V1"])
+@pytest.mark.parametrize("reply", [
+    "Your information has been saved successfully. Any other questions?",
+    "No documents were submitted. Your application was submitted to a bank.",
+    "I recorded your new details just now.",
+])
+def test_unsupported_claims_are_rejected_despite_questions_negations_or_old_state(reply, version):
+    state = initialize_scenario("Document receipt pending")
+    client = SequenceClient([completion(assistant_message(reply))])
+    result = run_manager_turn(
+        state, "Did you save this?", model_config(), client, prompt_version=version,
+    )
+    assert result["reply"] != reply
+    assert "can't confirm that any new information was saved" in result["reply"]
+    assert result["state"]["accepted_values"] == state["accepted_values"]
+
+
+@pytest.mark.parametrize("version", ["V0", "V1"])
+def test_staged_values_are_confirmed_as_staged_not_saved(version):
+    state = initialize_scenario("Tenure pending")
+    state["pending_values"] = {"employment_type": "self_employed", "monthly_income": 62000}
+    reply = "Your employment and income are noted for later; tenure is still needed."
+    client = SequenceClient([completion(assistant_message(reply))])
+    result = run_manager_turn(
+        state, "Did you save my employment and income?", model_config(), client,
+        prompt_version=version,
+    )
+    assert result["reply"] == reply
+    assert result["state"]["accepted_values"] == state["accepted_values"]
+    assert result["state"]["pending_values"] == state["pending_values"]
 
 
 @pytest.mark.parametrize("version", ["V0", "V1"])
@@ -363,8 +399,8 @@ def test_claim_of_external_submission_is_blocked_even_after_session_update():
     ])
     result = run_manager_turn(initialize_scenario(), "Yes, I consent.", model_config(), client)
     assert result["state"]["accepted_values"]["consent"] is True
-    assert "only the fictional session state" in result["reply"]
-    assert "no information was submitted to a bank" in result["reply"]
+    assert "helper accepted Explicit customer consent" in result["reply"]
+    assert "No information was submitted to a bank." in result["reply"]
 
 
 def test_mixed_submission_reports_partial_and_exact_outcomes():
