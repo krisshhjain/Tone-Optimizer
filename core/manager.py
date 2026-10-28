@@ -6,6 +6,7 @@ import json
 import re
 from copy import deepcopy
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from core.business_rule_helper import (
@@ -18,8 +19,21 @@ from core.model_client import ModelConfig, ModelError, create_completion
 from core.rules import DEFAULT_RULES_PATH, load_rules
 from core.state import validate_journey_state
 
-DEFAULT_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "v0_orchestration.md"
+PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
+PROMPT_PATHS = MappingProxyType({
+    "V0": PROMPTS_DIR / "v0_orchestration.md",
+    "V1": PROMPTS_DIR / "v1_conversational.md",
+})
+DEFAULT_PROMPT_VERSION = "V0"
 DEFAULT_MAX_TOOL_ROUNDS = 4
+
+
+def resolve_prompt_path(prompt_version: str = DEFAULT_PROMPT_VERSION) -> Path:
+    """Resolve an explicitly allowlisted prompt version to its repository file."""
+    if not isinstance(prompt_version, str) or prompt_version not in PROMPT_PATHS:
+        allowed = ", ".join(PROMPT_PATHS)
+        raise ValueError(f"Unsupported prompt version {prompt_version!r}; choose one of: {allowed}.")
+    return PROMPT_PATHS[prompt_version]
 
 
 def _read(value: Any, key: str, default: Any = None) -> Any:
@@ -31,13 +45,14 @@ def build_manager_messages(
     user_message: str,
     history: list[dict[str, Any]] | None = None,
     rules_path: str | Path = DEFAULT_RULES_PATH,
-    prompt_path: str | Path = DEFAULT_PROMPT_PATH,
+    *,
+    prompt_version: str = DEFAULT_PROMPT_VERSION,
 ) -> list[dict[str, Any]]:
     """Build current rule/state context and conversation turns for Nemotron."""
     rules = load_rules(rules_path)
     normalized = validate_journey_state(state, rules)
     context = get_journey_context(normalized, rules)
-    system_content = Path(prompt_path).read_text(encoding="utf-8").strip()
+    system_content = resolve_prompt_path(prompt_version).read_text(encoding="utf-8").strip()
     system_content += (
         "\n\nAuthoritative current journey context (JSON):\n"
         + json.dumps(context, ensure_ascii=False, sort_keys=True)
@@ -219,13 +234,16 @@ def run_manager_turn(
     client: Any = None,
     *,
     max_tool_rounds: int = DEFAULT_MAX_TOOL_ROUNDS,
+    prompt_version: str = DEFAULT_PROMPT_VERSION,
 ) -> dict[str, Any]:
     """Run a bounded tool-call loop; only helper-returned state is committed."""
     rules = load_rules()
     current = validate_journey_state(state, rules)
     current["messages"].append({"role": "user", "content": user_message})
     transcript = list(current["messages"][:-1])
-    messages = build_manager_messages(current, user_message, transcript)
+    messages = build_manager_messages(
+        current, user_message, transcript, prompt_version=prompt_version,
+    )
     tools = get_tool_definitions(rules)
     if max_tool_rounds < 0:
         raise ValueError("max_tool_rounds cannot be negative.")

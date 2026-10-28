@@ -1,4 +1,4 @@
-"""Summarize recorded V0 runs and optional human ratings as Markdown."""
+"""Summarize one prompt-version experiment and optional human ratings as Markdown."""
 
 from __future__ import annotations
 
@@ -123,6 +123,22 @@ def render_summary(results_dir: Path, ratings: list[Path] | None = None) -> str:
     run_paths = sorted(path for path in results_root.glob("*.json") if path.name != "summary.json")
     turns = [row for path in turn_paths for row in _read_jsonl(path)]
     runs = [json.loads(safe_read_text(path)) for path in run_paths]
+    experiment_ids = {
+        (record.get("prompt_version", "V0"), record.get("prompt_sha256"))
+        for record in [*runs, *turns]
+    }
+    if len(experiment_ids) > 1:
+        labels = ", ".join(
+            f"{version} ({prompt_hash or 'hash missing'})"
+            for version, prompt_hash in sorted(
+                experiment_ids, key=lambda item: (item[0], item[1] or ""),
+            )
+        )
+        raise ValueError(
+            "Cannot combine results from different prompt versions or hashes in one report: "
+            f"{labels}. Summarize each experiment from a separate results directory."
+        )
+    prompt_version, prompt_hash = next(iter(experiment_ids), ("V0", None))
     scenario_runs = [item for run in runs for item in run.get("runs", [])]
     executed = len(scenario_runs)
     successful = sum(item.get("status") == "successful" for item in scenario_runs)
@@ -139,7 +155,8 @@ def render_summary(results_dir: Path, ratings: list[Path] | None = None) -> str:
     rating_lines, _scores, turn_averages = _rating_summary(rating_paths, recorded_turns)
 
     lines = [
-        "# V0 evaluation summary", "",
+        f"# {prompt_version} evaluation summary", "",
+        f"- Prompt SHA-256: {prompt_hash or 'Not recorded'}",
         f"- Scenarios executed: {executed}",
         f"- Successful scenario runs: {successful}",
         f"- Failed scenario runs: {failed}",
@@ -198,7 +215,7 @@ def main() -> int:
         output = checked_path(args.output) if args.output else results_dir / "summary.md"
         ensure_directory(output.parent, create=True)
         safe_write_text(output, summary, overwrite=True)
-    except (UnsafePathError, OSError, csv.Error, json.JSONDecodeError) as exc:
+    except (UnsafePathError, OSError, csv.Error, json.JSONDecodeError, ValueError) as exc:
         print(f"Could not safely summarize evaluation results: {exc}")
         return 2
     print(f"Summary written to {output}")

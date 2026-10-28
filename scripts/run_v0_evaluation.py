@@ -1,4 +1,4 @@
-"""Run fixed V0 scenarios offline with mocks, or live with an explicit opt-in."""
+"""Run fixed V0/V1 prompt scenarios offline with mocks or live with explicit opt-in."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core.manager import run_manager_turn
+from core.manager import DEFAULT_PROMPT_VERSION, PROMPT_PATHS, run_manager_turn, resolve_prompt_path
 from core.model_client import GenerationSettings, ModelConfig, ModelError
 from core.rules import load_rules
 from core.state import initialize_scenario
@@ -131,7 +131,7 @@ def _settings(config: ModelConfig) -> dict[str, int | float]:
 
 def _run_scenario(
     scenario: dict[str, Any], config: ModelConfig, mode: str,
-    live_client: Any = None,
+    live_client: Any = None, prompt_version: str = DEFAULT_PROMPT_VERSION,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     state = initialize_scenario(scenario["starting_preset"])
     turn_rows: list[dict[str, Any]] = []
@@ -142,7 +142,9 @@ def _run_scenario(
         previous_event_count = len(state["tool_events"])
         client = OfflineClient(turn) if mode == "offline" else live_client
         started = time.perf_counter()
-        result = run_manager_turn(state, turn["message"], config, client=client)
+        result = run_manager_turn(
+            state, turn["message"], config, client=client, prompt_version=prompt_version,
+        )
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
         state = result["state"]
         after = _snapshot(state)
@@ -194,6 +196,7 @@ def _run_scenario(
 def _write_rating_template(
     path: Path, scenarios: list[dict[str, Any]] | None = None,
     run_id: str = "", model_id: str = "",
+    prompt_version: str = DEFAULT_PROMPT_VERSION,
 ) -> None:
     fields = ["run_id", "scenario_id", "turn", "prompt_version", "model_id", "reviewer_id",
               *RATING_FIELDS, "critical_violations", "reviewer_notes"]
@@ -204,7 +207,7 @@ def _write_rating_template(
         for index, _turn in enumerate(scenario["turns"], start=1):
             writer.writerow({
                 "run_id": run_id, "scenario_id": scenario["id"], "turn": index,
-                "prompt_version": "V0", "model_id": model_id,
+                "prompt_version": prompt_version, "model_id": model_id,
             })
     safe_write_text(path, stream.getvalue())
 
@@ -239,6 +242,10 @@ def main(argv: list[str] | None = None) -> int:
     selection.add_argument("--category")
     selection.add_argument("--all", action="store_true", help="run every scenario (the default)")
     parser.add_argument("--live", action="store_true", help="explicitly opt into provider requests")
+    parser.add_argument(
+        "--prompt-version", choices=tuple(PROMPT_PATHS), default=DEFAULT_PROMPT_VERSION,
+        help="allowlisted Manager prompt version (default: V0)",
+    )
     parser.add_argument("--output-dir", type=Path, default=ROOT / "evaluation" / "results")
     parser.add_argument("--max-live-requests", type=int, default=10)
     args = parser.parse_args(argv)
@@ -252,13 +259,15 @@ def main(argv: list[str] | None = None) -> int:
 
     scenarios = _load_scenarios()
     expected_prompt_hash = PROMPT_HASH_PATH.read_text(encoding="utf-8").split()[0]
-    actual_prompt_hash = _sha(PROMPT_PATH)
-    if actual_prompt_hash != expected_prompt_hash:
+    actual_v0_prompt_hash = _sha(PROMPT_PATH)
+    if actual_v0_prompt_hash != expected_prompt_hash:
         print(
             "The V0 prompt differs from the pinned baseline. Record it as a separate experiment; "
             "do not combine it with pinned V0 results.", file=sys.stderr,
         )
         return 2
+    selected_prompt_path = resolve_prompt_path(args.prompt_version)
+    selected_prompt_hash = _sha(selected_prompt_path)
     if args.scenario_id:
         scenarios = [item for item in scenarios if item["id"] == args.scenario_id]
     elif args.category:
@@ -283,8 +292,8 @@ def main(argv: list[str] | None = None) -> int:
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     metadata = {
         "run_id": run_id, "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "mode": mode, "prompt_version": "V0", "model_id": config.model,
-        "generation_settings": _settings(config), "prompt_sha256": actual_prompt_hash,
+        "mode": mode, "prompt_version": args.prompt_version, "model_id": config.model,
+        "generation_settings": _settings(config), "prompt_sha256": selected_prompt_hash,
         "rules_sha256": _sha(RULES_PATH), "git_commit_sha": _git_sha(),
         "git_worktree_dirty": _git_dirty(),
     }
@@ -294,7 +303,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.live and not scenario["requires_live_api"] and args.scenario_id is None and args.category is None:
             # All scenarios are still run when --all is selected; this flag records expected API need only.
             pass
-        turns, summary = _run_scenario(scenario, config, mode, live_client)
+        turns, summary = _run_scenario(
+            scenario, config, mode, live_client, prompt_version=args.prompt_version,
+        )
         summary["initial_preset"] = scenario["starting_preset"]
         summaries.append(summary)
         for turn_index, row in enumerate(turns):
@@ -316,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         _write_rating_template(
             output_dir / f"{run_id}_ratings.csv", scenarios, run_id, config.model,
+            prompt_version=args.prompt_version,
         )
     except (UnsafePathError, OSError) as exc:
         print(f"Could not safely write evaluation results: {exc}", file=sys.stderr)

@@ -1,6 +1,6 @@
-# Tone-Optimizer — V0 baseline
+# Tone-Optimizer — V0/V1 prompt foundation
 
-A local Streamlit proof of concept for a fictional Personal Loan conversation. One Nemotron Manager uses the V0 orchestration prompt and calls a deterministic Python helper for six ordered fictional rules. It is an evaluation project, not a loan application.
+A local Streamlit proof of concept for a fictional Personal Loan conversation. One Nemotron Manager selects an allowlisted V0 or V1 prompt and calls a deterministic Python helper for six ordered fictional rules. It is an evaluation project, not a loan application.
 
 ## Safety and data scope
 
@@ -11,12 +11,13 @@ Synthetic entries can be retained temporarily in local Streamlit session state. 
 ## Architecture
 
 - `app.py` — Streamlit chat, progress, and session controls.
-- `core/manager.py` — V0 prompt assembly, structured helper calls, refusal and unsupported-save safeguards.
+- `core/manager.py` — allowlisted V0/V1 prompt selection, shared structured helper calls, refusal and unsupported-save safeguards.
 - `core/model_client.py` — OpenAI-compatible NVIDIA client using environment configuration.
 - `core/business_rule_helper.py` — deterministic read-context and submit-information tools, including per-field and event-level outcomes.
 - `core/rules.py`, `config/pl_rules.json` — six ordered fictional rules and validation.
 - `core/state.py` — temporary accepted/staged state and presets. Only helper-validated values advance progress.
-- `prompts/v0_orchestration.md` — the V0 Manager prompt under evaluation. No V1/V2 treatments are included.
+- `prompts/v0_orchestration.md` — the pinned V0 baseline prompt.
+- `prompts/v1_conversational.md` — a V1 starting copy under development; it does not yet contain conversational optimization.
 - `evaluation/` — fixed synthetic scenarios, human rubric, blank rating sheet, and run instructions.
 - `scripts/run_v0_evaluation.py` — offline mock or explicitly opted-in live scenario runner that calls the existing Manager runtime.
 - `scripts/summarize_v0_evaluation.py` — Markdown summary from recorded runs and optional human ratings.
@@ -52,6 +53,12 @@ Start the local app:
 python -m streamlit run app.py
 ```
 
+### Manager prompt versions
+
+V0 is the pinned baseline orchestration prompt. V1 is an under-development prompt file that currently starts as a faithful copy of V0, with a V1 heading. Select **V0 — Baseline** or **V1 — Conversational** in the Streamlit sidebar to choose which file the same Manager implementation sends to Nemotron. Switching versions resets the current conversation and synthetic journey to the selected preset so messages and accepted values from one prompt version cannot contaminate the other. Resetting within a version keeps that version selected.
+
+Phase 1 establishes prompt versioning only. It does not claim that V1 improves conversation quality. Both versions use the same Nemotron configuration and generation settings, the same two helper tools, the same six rules, and the same validation and state-transition logic. V1 prompt optimization is reserved for V1 Phase 2.
+
 ## Evaluation
 
 There are 30 synthetic cases: 5 normal progression, 5 clarification, 4 repetition/context, 5 language adaptation, 4 invalid values, 3 out-of-order, 2 refusals/interruption, and 2 completion/failure. Each records expected active rule, state changes, tool behavior, critical conditions, starting preset, and whether conversational evaluation requires the real API. No real identity or bank information is present.
@@ -65,6 +72,15 @@ python scripts/run_v0_evaluation.py --scenario-id V0-IV-03
 python scripts/run_v0_evaluation.py --category clarification_questions
 python scripts/run_v0_evaluation.py --all
 ```
+
+Select a prompt version explicitly; omission defaults to V0. Each invocation evaluates one version only, and metadata plus rating rows identify the selected version and prompt hash:
+
+```bash
+python scripts/run_v0_evaluation.py --prompt-version V0 --scenario-id V0-CL-04 --output-dir evaluation/results/V0
+python scripts/run_v0_evaluation.py --prompt-version V1 --scenario-id V0-CL-04 --output-dir evaluation/results/V1
+```
+
+The runner checks the pinned V0 prompt hash on every run, including V1 runs, and records the actual selected prompt hash. Runs are kept separately labeled; the summarizer refuses to combine results that have different prompt versions or hashes. Use separate results directories when preparing reports for V0 and V1.
 
 Choose another output directory with `--output-dir path/to/output`. Each run writes turn-level JSONL, run metadata/final state JSON, and a blank human-rating CSV. Generated output under `evaluation/results/` is ignored by Git.
 
@@ -84,7 +100,7 @@ python scripts/run_v0_evaluation.py --live --all --max-live-requests 100
 
 The request cap applies across the selected run, including follow-up tool rounds. A reached cap may leave a scenario with an explicit API error; helper-confirmed commits remain in its recorded final state. Do not describe a scenario as live-tested unless the output says it was run in `live` mode.
 
-The JSONL/JSON outputs record UTC timestamp, run/scenario IDs, V0 prompt and rule SHA-256 hashes, model ID, generation settings, git SHA when available, initial preset, expected/observed transitions, assistant text, sanitized tool outcomes, latency, errors, and final accepted/staged values. Keys, authorization headers, and hidden reasoning are not exported. Transcripts are synthetic and may be written as evaluation artifacts.
+The JSONL/JSON outputs record UTC timestamp, run/scenario IDs, selected prompt version and SHA-256, rule SHA-256, model ID, generation settings, git SHA when available, initial preset, expected/observed transitions, assistant text, sanitized tool outcomes, latency, errors, and final accepted/staged values. Keys, authorization headers, and hidden reasoning are not exported. Transcripts are synthetic and may be written as evaluation artifacts.
 
 ### Human ratings and report
 
@@ -116,7 +132,7 @@ Run these in the Streamlit app and record actual Nemotron replies, tool events, 
 
 The pinned V0 prompt SHA-256 is `69e6071c19c1ed66f48893bc79b33ad9078cb9244edb8d7562b435be27f42c99` (`prompts/v0_baseline.sha256`). The runner stops if the prompt file no longer matches this baseline. Every run records the prompt and rule hashes. Preserve scenario data, tool definitions, state-transition logic, initial presets, model, generation settings, and rubric when comparing versions. Later V1 and V2 experiments may be compared against these V0 outputs only after they are separately approved and implemented. A changed prompt or implementation is a distinct experiment; do not pool runs with different hashes as one baseline.
 
-Phase 4 stabilizes the V0 workflow and prepares reproducible evaluation. It does not implement V1 language mirroring, empathy prompting, few-shot examples, prompt comparisons, an LLM judge, dashboard, database, deployment, or additional services.
+V0 Phase 4 stabilized the baseline workflow and prepared reproducible evaluation. V1 Phase 1 establishes prompt version selection only; V1 conversational improvements, prompt comparisons, an LLM judge, dashboard, database, deployment, and additional services are not implemented here.
 
 ## Known limitations
 

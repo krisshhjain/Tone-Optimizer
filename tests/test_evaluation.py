@@ -10,6 +10,7 @@ from scripts import run_v0_evaluation as runner
 from scripts import summarize_v0_evaluation as summarizer
 from scripts import safe_paths
 from scripts.safe_paths import UnsafePathError, safe_write_text
+from core.manager import PROMPT_PATHS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +44,42 @@ def test_v0_prompt_matches_pinned_baseline_hash():
     expected = runner.PROMPT_HASH_PATH.read_text(encoding="utf-8").split()[0]
     actual = hashlib.sha256(runner.PROMPT_PATH.read_bytes()).hexdigest()
     assert actual == expected
+
+
+@pytest.mark.parametrize("prompt_version", ["V0", "V1"])
+def test_offline_runner_supports_each_prompt_version(prompt_version):
+    scenario = next(item for item in runner._load_scenarios() if item["id"] == "V0-IV-03")
+    config = runner.ModelConfig("offline", "offline://", "offline-mock", runner.GenerationSettings())
+    turns, summary = runner._run_scenario(
+        scenario, config, "offline", prompt_version=prompt_version,
+    )
+    assert summary["status"] == "successful"
+    assert all(turn["state_transition_correct"] for turn in turns)
+
+
+@pytest.mark.parametrize("prompt_version", ["V0", "V1"])
+def test_evaluation_exports_version_and_selected_prompt_hash(
+    prompt_version, tmp_path, monkeypatch,
+):
+    monkeypatch.setattr(
+        runner.ModelConfig, "from_env",
+        classmethod(lambda cls: (_ for _ in ()).throw(AssertionError("offline must not configure NVIDIA"))),
+    )
+    output = tmp_path / prompt_version
+    assert runner.main([
+        "--prompt-version", prompt_version, "--scenario-id", "V0-IV-03",
+        "--output-dir", str(output),
+    ]) == 0
+    metadata = json.loads(next(output.glob("*.json")).read_text(encoding="utf-8"))
+    row = json.loads(next(output.glob("*.jsonl")).read_text(encoding="utf-8").splitlines()[0])
+    rating = next(csv.DictReader(next(output.glob("*_ratings.csv")).open(encoding="utf-8", newline="")))
+    expected_hash = hashlib.sha256(PROMPT_PATHS[prompt_version].read_bytes()).hexdigest()
+    assert metadata["prompt_version"] == row["prompt_version"] == rating["prompt_version"] == prompt_version
+    assert metadata["prompt_sha256"] == row["prompt_sha256"] == expected_hash
+    assert row["mode"] == "offline"
+    report = summarizer.render_summary(output)
+    assert f"# {prompt_version} evaluation summary" in report
+    assert expected_hash in report
 
 
 def test_offline_runner_uses_manager_runtime_and_isolates_each_scenario():
@@ -166,6 +203,26 @@ def test_summary_labels_examples_from_recorded_human_scores(tmp_path):
     assert "normal_progression: contextual_relevance=3.50 (n=2)" in report
     assert "r1:" in report and "r2:" in report
     assert "unmatched rows/files: 1" in report
+
+
+def test_summarizer_refuses_to_combine_different_prompt_versions_or_hashes(tmp_path):
+    for index, (version, prompt_hash) in enumerate((
+        ("V0", "hash-v0"), ("V1", "hash-v1"),
+    )):
+        (tmp_path / f"run-{index}.json").write_text(json.dumps({
+            "prompt_version": version, "prompt_sha256": prompt_hash, "runs": [],
+        }), encoding="utf-8")
+    with pytest.raises(ValueError, match="Cannot combine results from different prompt versions or hashes"):
+        summarizer.render_summary(tmp_path)
+
+    for path in tmp_path.glob("run-*.json"):
+        path.unlink()
+    for index, prompt_hash in enumerate(("hash-v1a", "hash-v1b")):
+        (tmp_path / f"run-{index}.json").write_text(json.dumps({
+            "prompt_version": "V1", "prompt_sha256": prompt_hash, "runs": [],
+        }), encoding="utf-8")
+    with pytest.raises(ValueError, match="Cannot combine results from different prompt versions or hashes"):
+        summarizer.render_summary(tmp_path)
 
 
 def test_scenario_runner_is_offline_unless_live_flag_is_explicit():
