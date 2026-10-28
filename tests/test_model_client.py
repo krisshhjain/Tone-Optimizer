@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.model_client import GenerationSettings, ModelConfig, ModelError, generate_reply
+from core.model_client import GenerationSettings, ModelConfig, ModelError, create_completion, generate_reply
 
 
 def config(**kwargs):
@@ -96,3 +96,15 @@ def test_credentials_never_enter_completion_payload():
     client = FakeClient(response("Reply"))
     generate_reply([{"role": "user", "content": "hello"}], config(), client)
     assert all("test-secret-never-logged" not in str(value) for value in client.kwargs.values())
+
+
+def test_completion_sends_structured_tool_schema_and_choice():
+    client = FakeClient(response("unused"))
+    tools = [{"type": "function", "function": {"name": "probe", "parameters": {"type": "object"}}}]
+    create_completion(
+        [{"role": "user", "content": "Call probe"}], config(), client,
+        tools=tools, tool_choice="required", max_tokens=128,
+    )
+    assert client.kwargs["tools"] == tools
+    assert client.kwargs["tool_choice"] == "required"
+    assert client.kwargs["max_tokens"] == 128

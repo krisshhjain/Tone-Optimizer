@@ -79,21 +79,34 @@ def _make_client(config: ModelConfig) -> Any:
     )
 
 
-def generate_reply(messages: list[dict[str, str]], config: ModelConfig, client: Any = None) -> str:
-    """Call the configured chat completion endpoint and return plain assistant text."""
-    if not messages or any(m.get("role") not in {"system", "user", "assistant"} for m in messages):
+def create_completion(
+    messages: list[dict[str, Any]],
+    config: ModelConfig,
+    client: Any = None,
+    *,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | dict[str, Any] = "auto",
+    max_tokens: int | None = None,
+) -> Any:
+    """Request a raw completion, optionally enabling OpenAI-compatible tools."""
+    allowed_roles = {"system", "user", "assistant", "tool"}
+    if not messages or any(m.get("role") not in allowed_roles for m in messages):
         raise ModelError("The model request could not be prepared.")
     api_client = client if client is not None else _make_client(config)
     settings = config.settings
+    request_args: dict[str, Any] = {
+        "model": config.model,
+        "messages": messages,
+        "temperature": settings.temperature,
+        "top_p": settings.top_p,
+        "max_tokens": max_tokens or settings.max_tokens,
+        "stream": False,
+    }
+    if tools is not None:
+        request_args["tools"] = tools
+        request_args["tool_choice"] = tool_choice
     try:
-        response = api_client.chat.completions.create(
-            model=config.model,
-            messages=messages,
-            temperature=settings.temperature,
-            top_p=settings.top_p,
-            max_tokens=settings.max_tokens,
-            stream=False,
-        )
+        return api_client.chat.completions.create(**request_args)
     except Exception as exc:
         # Do not include exception text: provider errors can echo request metadata.
         error_type = type(exc).__name__
@@ -105,6 +118,10 @@ def generate_reply(messages: list[dict[str, str]], config: ModelConfig, client: 
             raise ModelError("The model endpoint is unavailable. Check configuration and try again.") from None
         raise ModelError("The model request failed. Please check the endpoint configuration and try again.") from None
 
+
+def generate_reply(messages: list[dict[str, Any]], config: ModelConfig, client: Any = None) -> str:
+    """Call the configured chat completion endpoint and return plain assistant text."""
+    response = create_completion(messages, config, client)
     try:
         content = response.choices[0].message.content
     except (AttributeError, IndexError, KeyError, TypeError):

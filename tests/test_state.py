@@ -65,6 +65,8 @@ def test_reset_restores_preset_and_clears_messages():
     reset = reset_state("Tenure pending")
     assert reset["accepted_values"] == PRESETS["Tenure pending"]
     assert reset["messages"] == []
+    assert reset["pending_values"] == {}
+    assert reset["tool_events"] == []
 
 
 def test_manager_reply_cannot_advance_or_modify_values():
