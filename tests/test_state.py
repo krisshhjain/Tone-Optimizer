@@ -67,6 +67,15 @@ def test_reset_restores_preset_and_clears_messages():
     assert reset["messages"] == []
 
 
+def test_manager_reply_cannot_advance_or_modify_values():
+    state = initialize_scenario("Document receipt pending")
+    original_values = state["accepted_values"].copy()
+    # Model output is plain conversation text and is never passed to a state mutation helper.
+    state["messages"].append({"role": "assistant", "content": "Your income was recorded."})
+    assert state["accepted_values"] == original_values
+    assert active_field(state) == "demo_pan_receipt"
+
+
 def test_completed_journey_has_no_active_rule():
     state = initialize_scenario()
     for field, value in [("consent", True), ("loan_amount", 10000), ("tenure_months", 6),
