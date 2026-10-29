@@ -63,6 +63,8 @@ V1 Phase 2 changed prompt instructions only. Phase 3 also refines the shared Pyt
 
 For the controlled V0/V1 Phase 4 comparison, paired review workflow, and separately documented opt-in live commands, see [evaluation/README.md](evaluation/README.md). The Phase 4 comparison uses offline runs to verify workflow artifacts only; live conversation quality requires comparable provider runs and paired human review.
 
+The V1 professional tone-polish prompt hash, isolated offline rerun instructions, and focused manual checks are documented in [evaluation/README.md](evaluation/README.md) and [evaluation/v1_tone_polish_manual_checks.md](evaluation/v1_tone_polish_manual_checks.md). Results from the prior V1 prompt hash must remain separate from the refined prompt.
+
 There are 30 synthetic cases: 5 normal progression, 5 clarification, 4 repetition/context, 5 language adaptation, 4 invalid values, 3 out-of-order, 2 refusals/interruption, and 2 completion/failure. Each records expected active rule, state changes, tool behavior, critical conditions, starting preset, and whether conversational evaluation requires the real API. No real identity or bank information is present.
 
 ### Offline mocked run

@@ -94,7 +94,7 @@ def test_prompt_version_defaults_to_v0_and_v1_has_conversational_instruction_cat
         assert heading in v1_prompt
     for requirement in (
         "10,000", "500,000", "6, 12, 18, 24, or 36", "self_employed",
-        "positive integer monthly income", "synthetic document-receipt flag",
+        "positive integer monthly income", "simulated document-receipt step",
         "provider's handling or retention is not established", "Never request or invite real PAN",
         "Python owns validation and state", "Do not reveal this decision process",
     ):
@@ -108,8 +108,18 @@ def test_v1_prompt_requires_unambiguous_consent_and_contains_no_few_shot_dialogu
     assert "explicit, unambiguous customer consent" in prompt
     assert "asking you to start is not automatically consent" in prompt
     assert "if their meaning is ambiguous, do not submit consent" in prompt
-    assert "python still validates the boolean value, but does not determine" in prompt
-    assert "approximately one to three concise sentences" in prompt
+    assert "python validates the boolean value but does not determine" in prompt
+    assert "one or two concise sentences" in prompt
+    assert "professional, helpful personal-loan service representative" in prompt
+    assert "give this disclosure once, not once per turn" in prompt
+    assert "do not repeatedly call the journey fictional or a demo" in prompt
+    assert "on the first customer-facing response" in prompt
+    assert "without implying affiliation with a real bank" in prompt
+    assert "clearly distinguish that from loan approval" in prompt
+    assert "answer it directly before offering a useful next step" in prompt
+    assert "follow the customer's latest meaningful message" in prompt
+    assert "few-shot" not in prompt
+    assert "example dialogue" not in prompt
 
 
 def test_unknown_prompt_versions_are_rejected_without_arbitrary_paths():

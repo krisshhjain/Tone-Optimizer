@@ -49,3 +49,18 @@ python scripts/prepare_v0_v1_review_sheet.py --v0-dir evaluation/results/phase4-
 ```
 
 Do not treat the earlier shared Streamlit conversations as paired benchmark data. Use the Phase 2/3 manual checklists for focused qualitative review, and attribute deterministic helper-outcome/refusal fallbacks separately where event traces permit it. Do not change either prompt based on Phase 4 findings.
+
+## V1 professional tone polish
+
+The separate V1 tone-polish experiment changes only the V1 prompt and directly related prompt tests/docs. It does not change V0, the shared Manager/controller, tools, rules, model settings, fixed scenarios, or rubric. The previous V1 prompt SHA-256 was d18c87a0631e5525ec2ac03234ce020e779153fc7f5a7ba1d8cc8e4daf061496. Keep all results with that hash labeled as the earlier prompt; do not combine their responses or ratings with the refined prompt. The V0 pinned hash remains 69e6071c19c1ed66f48893bc79b33ad9078cb9244edb8d7562b435be27f42c99.
+
+After committing the refined prompt, rerun the same offline fixed dataset for both versions into new directories. These commands make no provider requests:
+
+```powershell
+python scripts/run_v0_evaluation.py --prompt-version V0 --output-dir evaluation/results/v1-tone-polish/V0
+python scripts/run_v0_evaluation.py --prompt-version V1 --output-dir evaluation/results/v1-tone-polish/V1
+python scripts/summarize_v0_evaluation.py --results-dir evaluation/results/v1-tone-polish/V0 --output evaluation/results/v1-tone-polish/V0/summary.md
+python scripts/summarize_v0_evaluation.py --results-dir evaluation/results/v1-tone-polish/V1 --output evaluation/results/v1-tone-polish/V1/summary.md
+```
+
+Check that both run metadata files record the same clean controller commit, model ID, generation settings, and rules hash, and that V1 records the new prompt hash. Once the Phase 4 comparison tool is available on main, compare these two new directories only. The focused language, consent, privacy, refusal, and completion cases are in v1_tone_polish_manual_checks.md. They are live-quality checks and require explicit authorization before any model API calls.
