@@ -118,6 +118,9 @@ def test_v1_prompt_requires_unambiguous_consent_and_contains_no_few_shot_dialogu
     assert "clearly distinguish that from loan approval" in prompt
     assert "answer it directly before offering a useful next step" in prompt
     assert "follow the customer's latest meaningful message" in prompt
+    assert "reply in clear, natural english" in prompt
+    assert "everyday hindi using devanagari" in prompt
+    assert "natural romanized hinglish" in prompt
     assert "few-shot" not in prompt
     assert "example dialogue" not in prompt
 
