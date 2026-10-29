@@ -49,3 +49,18 @@ python scripts/prepare_v0_v1_review_sheet.py --v0-dir evaluation/results/phase4-
 ```
 
 Do not treat the earlier shared Streamlit conversations as paired benchmark data. Use the Phase 2/3 manual checklists for focused qualitative review, and attribute deterministic helper-outcome/refusal fallbacks separately where event traces permit it. Do not change either prompt based on Phase 4 findings.
+
+## V1 professional tone polish
+
+The separate V1 tone-polish experiment changes only the V1 prompt and directly related prompt tests/docs. It does not change V0, the shared Manager/controller, tools, rules, model settings, fixed scenarios, or rubric. The previous V1 prompt SHA-256 was d18c87a0631e5525ec2ac03234ce020e779153fc7f5a7ba1d8cc8e4daf061496. Keep all results with that hash labeled as the earlier prompt; do not combine their responses or ratings with the refined prompt. The refined V1 prompt SHA-256 is 533cdacec8e4747cfa63e6574199c0bf726d2d2c96667cec52942e674dfb2312. The V0 pinned hash remains 69e6071c19c1ed66f48893bc79b33ad9078cb9244edb8d7562b435be27f42c99.
+
+After committing the refined prompt, rerun the same offline fixed dataset for both versions into new directories. These commands make no provider requests:
+
+```powershell
+python scripts/run_v0_evaluation.py --prompt-version V0 --output-dir evaluation/results/v1-tone-polish/V0
+python scripts/run_v0_evaluation.py --prompt-version V1 --output-dir evaluation/results/v1-tone-polish/V1
+python scripts/summarize_v0_evaluation.py --results-dir evaluation/results/v1-tone-polish/V0 --output evaluation/results/v1-tone-polish/V0/summary.md
+python scripts/summarize_v0_evaluation.py --results-dir evaluation/results/v1-tone-polish/V1 --output evaluation/results/v1-tone-polish/V1/summary.md
+```
+
+These offline runs were recorded on clean controller commit f99bb12e8aa4accbe1edc2fe81ae5386f780eef0: 30 scenarios and 36 turns per prompt. Both recorded 36/36 expected state-transition matches. The per-version summaries and paired artifact report are in v1_tone_polish_offline_comparison.md. They contain mocked workflow evidence only; no live calls or human scores were produced, so conversational quality remains unmeasured. The focused language, consent, privacy, refusal, and completion cases are in v1_tone_polish_manual_checks.md. They are live-quality checks and require explicit authorization before any model API calls.
