@@ -169,7 +169,7 @@ def build_comparison(m0, rows0, m1, rows1, rating_paths0=(), rating_paths1=()):
             "unexpected_tool_expectation_mismatches": unexpected_tools,
             "accepted_fields_at_scenario_end": sum(len((r.get("state_after") or {}).get("accepted_values", {})) for r in latest_by_scenario.values()),
             "staged_fields_at_scenario_end": sum(len((r.get("state_after") or {}).get("staged_values", {})) for r in latest_by_scenario.values()),
-            "completed_scenarios": sum(bool((r.get("state_after") or {}).get("accepted_values", {}).get("document_received")) for r in latest_by_scenario.values()),
+            "completed_scenarios": sum(bool((r.get("state_after") or {}).get("accepted_values", {}).get("demo_pan_receipt")) for r in latest_by_scenario.values()),
         }
     ra, rb = _ratings(rating_paths0, m0["run_id"], a), _ratings(rating_paths1, m1["run_id"], b)
     quality = {}
@@ -210,7 +210,8 @@ def render_report(d):
         rate = (f"{w['expected_transition_matches']}/{w['paired_turns']} "
                 f"({100*w['expected_transition_matches']/w['paired_turns']:.1f}%)") if w["paired_turns"] else "not available"
         latency = f"{w['mean_latency_ms']} ms" if w["mean_latency_ms"] is not None else "not recorded"
-        lines.append(f"- {v}: expected-transition matches {rate}; mismatch candidates {w['critical_violation_candidates']}; unexpected tool-expectation mismatches {w['unexpected_tool_expectation_mismatches']}; API errors {w['api_errors']}; mean latency {latency}; accepted/staged fields at scenario end {w['accepted_fields_at_scenario_end']}/{w['staged_fields_at_scenario_end']}; completed scenarios {w['completed_scenarios']}; tool calls {w['tool_calls']}; field outcomes {w['field_outcomes_by_field']}.")
+        error_label = "offline fixture errors (not provider requests)" if d["mode"] == "offline" else "API errors"
+        lines.append(f"- {v}: expected-transition matches {rate}; mismatch candidates {w['critical_violation_candidates']}; unexpected tool-expectation mismatches {w['unexpected_tool_expectation_mismatches']}; {error_label} {w['api_errors']}; mean latency {latency}; accepted/staged fields at scenario end {w['accepted_fields_at_scenario_end']}/{w['staged_fields_at_scenario_end']}; scenarios with final receipt accepted {w['completed_scenarios']}; tool calls {w['tool_calls']}; field outcomes {w['field_outcomes_by_field']}.")
     lines += ["", "The records do not independently establish false approval/save claims, refusal quality, or semantic consent. Review the real response alongside tool outcomes and state. An expected tool mismatch alone is not a verified safety violation.", "",
               "## Human-rated conversational quality", ""]
     if d["mode"] != "live":
@@ -228,7 +229,7 @@ def render_report(d):
               "Diagnostics: " + ("; ".join(d["diagnostics"]) if d["diagnostics"] else "No coverage discrepancy detected."),
               "Latency and response length are operational context, not quality scores. Run-to-run variation and limited reviewer coverage constrain conclusions."]
     if d["mode"] == "offline":
-        lines.append("**Conclusion: conversational quality remains unmeasured.** These offline mocks check workflow plumbing only; use comparable live runs and paired human ratings before judging whether V1 is better, equivalent, or worse.")
+        lines.append("No live Nemotron API calls were made. **Conclusion: conversational quality remains unmeasured.** These offline mocks check workflow plumbing only; use comparable live runs and paired human ratings before judging whether V1 is better, equivalent, or worse.")
     else:
         lines.append("**Conclusion: no superiority claim is made by this report.** Interpret paired outcomes with sample size, missing ratings, deterministic fallbacks, and model variation in view.")
     return "\n".join(lines) + "\n"
