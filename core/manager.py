@@ -154,30 +154,86 @@ def _active_rule_id(state: dict[str, Any], rules: list[dict[str, Any]]) -> str |
     return active["id"] if active else None
 
 
-def _helper_outcome_summary(outcomes: list[dict[str, Any]], state: dict[str, Any], rules: list[dict[str, Any]]) -> str:
-    labels = {rule["field"]: rule["label"] for rule in rules}
-    groups: dict[str, list[str]] = {}
+def _invalid_value_guidance(rule: dict[str, Any]) -> str:
+    """Explain a rejected value using only its configured validation metadata."""
+    label = re.sub(r"\s*\([^)]*\)", "", rule.get("label", "That value")).strip()
+    validation = rule.get("validation", {})
+    kind = validation.get("type")
+    if kind == "integer" and "allowed" in validation:
+        choices = validation["allowed"]
+        if rule.get("field") == "tenure_months":
+            return f"That tenure isn't one of the permitted demo options. Please choose {', '.join(map(str, choices))} months."
+        return f"{label} must be one of the configured options: {', '.join(map(str, choices))}."
+    if kind == "integer" and "minimum" in validation and "maximum" in validation:
+        return f"{label} must be between {validation['minimum']} and {validation['maximum']}."
+    if kind == "integer" and "minimum" in validation:
+        return f"{label} must be a whole number of at least {validation['minimum']}."
+    if kind == "choice":
+        choices = [str(value).replace("_", " ") for value in validation.get("allowed", [])]
+        return f"Please choose {', '.join(map(str, choices))} for {label.lower()}."
+    if kind == "boolean" and validation.get("must_be_true"):
+        return f"Please give a clear affirmative confirmation for {label.lower()} to continue."
+    return f"That value doesn't meet the configured requirement for {label.lower()}."
+
+
+def _helper_outcome_summary(
+    outcomes: list[dict[str, Any]],
+    state: dict[str, Any],
+    rules: list[dict[str, Any]],
+    *,
+    operation_failed: bool = False,
+) -> str:
+    """Summarize actual helper results without exposing internal status labels."""
+    by_field = {rule["field"]: rule for rule in rules}
+    accepted: list[str] = []
+    staged: list[str] = []
+    rejected: list[str] = []
+    other: list[str] = []
     for outcome in outcomes:
         field = outcome.get("field")
+        rule = by_field.get(field)
+        label = rule.get("label", "that field") if rule else "that field"
         status = outcome.get("status", "failed")
-        display = labels.get(field, field or "tool request")
-        groups.setdefault(status, []).append(display)
-    parts = []
-    for status, verb in (
-        ("accepted", "accepted"), ("staged", "staged"),
-        ("invalid", "rejected"), ("missing_prerequisite", "blocked by a prerequisite"),
-        ("unknown_field", "not recognized"), ("already_completed", "already completed and unchanged"),
+        if status == "accepted":
+            accepted.append(label)
+        elif status == "staged":
+            staged.append(label)
+        elif status == "invalid" and rule:
+            rejected.append(_invalid_value_guidance(rule))
+        elif status == "missing_prerequisite":
+            other.append(f"{label} can't be added until its prerequisite is complete")
+        elif status == "already_completed":
+            other.append(f"{label} was already complete and remains unchanged")
+        elif status == "unknown_field":
+            other.append("one requested item isn't part of this demo")
+        elif status == "declined":
+            other.append("no value was recorded because you declined")
+        else:
+            other.append(f"the helper couldn't process {label}")
+
+    sentences: list[str] = []
+    if accepted:
+        sentences.append(f"The demo helper accepted {', '.join(accepted)}.")
+    if staged:
+        sentences.append(
+            f"The demo helper staged {', '.join(staged)} for after the earlier requirements are complete."
+        )
+    sentences.extend(rejected)
+    sentences.extend(f"{item[0].upper() + item[1]}." for item in other)
+    if operation_failed and outcomes and all(
+        outcome.get("status") in {"accepted", "staged"} for outcome in outcomes
     ):
-        if groups.get(status):
-            parts.append(f"{verb}: {', '.join(groups[status])}")
+        sentences.append("A separate helper operation could not be processed, and it made no change.")
+    if not sentences:
+        sentences.append("I couldn't process that request, and no value was changed.")
+
     active = _active_rule_id(state, rules)
-    active_label = next((rule["label"] for rule in rules if rule["id"] == active), None)
-    summary = "; ".join(parts) or "the helper could not process the request"
-    if active_label:
-        summary += f". Current requirement: {active_label}."
+    active_rule = next((rule for rule in rules if rule["id"] == active), None)
+    if active_rule:
+        sentences.append(f"The next required item is {active_rule['label']}.")
     else:
-        summary += ". The fictional journey is complete."
-    return summary
+        sentences.append("The fictional demo journey is complete.")
+    return " ".join(sentences)
 
 
 def _is_refusal(message: str) -> bool:
@@ -198,8 +254,105 @@ def _refusal_response(state: dict[str, Any], rules: list[dict[str, Any]]) -> str
     )
 
 
-def _has_unsupported_save_claim(reply: str) -> bool:
-    return bool(re.search(r"\b(?:saved|recorded|stored|submitted)\b", reply, re.IGNORECASE))
+_AFFIRMATIVE_SAVE_CLAIM = re.compile(
+    r"\b(?:i(?:['’](?:ve|d))?|we(?:['’](?:ve|d))?|the system|everything|"
+    r"(?:all\s+)?(?:your|the)\s+(?:information|details|data|\w+(?:\s+and\s+\w+)?)|"
+    r"(?:all\s+)?(?:information|details|data))\s+"
+    r"(?:(?:have|has|had|is|are|was|were|did|got|just|now|already|successfully|been|being)\s+)*"
+    r"(?:saved|recorded|stored|submitted|saving|recording|storing|submitting)\b"
+    r"|\b(?:saved|recorded|stored|submitted)\s+(?:your|the)\s+"
+    r"(?:information|details|data|\w+(?:\s+and\s+\w+)?)\b",
+    re.IGNORECASE,
+)
+
+
+def _has_unsupported_save_claim(
+    reply: str,
+    state: dict[str, Any] | None = None,
+    rules: list[dict[str, Any]] | None = None,
+    helper_outcomes: list[dict[str, Any]] | None = None,
+) -> bool:
+    """Block affirmative save claims unless the exact fields are helper-confirmed as accepted."""
+    text = reply.strip()
+    if not text:
+        return False
+
+    negation = re.compile(
+        r"\b(?:no|not|never|(?:did|do|does|have|has|had|is|are|was|were|will|would|can|could|should)n['’]t)\b",
+        re.IGNORECASE,
+    )
+    boundaries = list(re.finditer(r"[.!?;,\n]|\b(?:but|however|yet)\b", text, re.IGNORECASE))
+
+    def clause_before(position: int) -> str:
+        start = max((item.end() for item in boundaries if item.end() <= position), default=0)
+        return text[start:position]
+
+    def sentence_after(position: int) -> tuple[str, str | None]:
+        end = re.search(r"[.!?;\n]", text[position:])
+        if not end:
+            return text[position:], None
+        boundary = text[position + end.start()]
+        return text[position:position + end.start()], boundary
+
+    aliases = {
+        "employment_type": ("employment", "employment type", "job category"),
+        "monthly_income": ("income", "monthly income"),
+        "loan_amount": ("loan amount", "amount"),
+        "tenure_months": ("tenure", "months"),
+        "consent": ("consent",),
+        "demo_pan_receipt": ("receipt confirmation", "document receipt", "demo pan receipt"),
+    }
+    accepted = state.get("accepted_values", {}) if state else {}
+    pending = state.get("pending_values", {}) if state else {}
+    current_accepted = {
+        outcome.get("field") for outcome in (helper_outcomes or [])
+        if outcome.get("status") == "accepted"
+    }
+
+    for claim in _AFFIRMATIVE_SAVE_CLAIM.finditer(text):
+        prefix = clause_before(claim.start())
+        if negation.search(prefix):
+            continue
+
+        tail, sentence_ending = sentence_after(claim.end())
+        # A question about one save claim must not hide a separate claim in another sentence.
+        if sentence_ending == "?":
+            continue
+        clause_tail = re.split(
+            r"[.!?;,\n]|\b(?:but|however|yet)\b", tail, maxsplit=1, flags=re.IGNORECASE,
+        )[0]
+        claim_text = text[claim.start():claim.end()] + clause_tail
+        if re.search(
+            r"\bsubmitted\b|\b(?:to|into)\s+(?:the\s+)?(?:bank|database|loan application)\b",
+            claim_text,
+            re.IGNORECASE,
+        ):
+            return True
+
+        if state is None or rules is None:
+            return True
+        mentioned: list[str] = []
+        for rule in rules:
+            field = rule.get("field", "")
+            terms = (rule.get("label", "").casefold(), *aliases.get(field, ()), field.replace("_", " "))
+            if any(term and re.search(rf"\b{re.escape(term)}\b", claim_text, re.IGNORECASE) for term in terms):
+                mentioned.append(field)
+
+        # A generic "your information" claim is not proven by some unrelated older field.
+        if not mentioned:
+            return True
+        if not all(field in accepted for field in mentioned):
+            return True
+
+        novelty = re.search(r"\b(?:new|just now|this turn|this time|today)\b", claim_text, re.IGNORECASE)
+        if novelty and not all(field in current_accepted for field in mentioned):
+            return True
+
+        # A staged value is present in session state but is not complete or customer-facingly "saved".
+        if any(field in pending for field in mentioned):
+            return True
+
+    return False
 
 
 def _assistant_tool_message(message: Any, calls: list[Any]) -> dict[str, Any]:
@@ -255,7 +408,9 @@ def run_manager_turn(
         try:
             response = create_completion(messages, config, client, tools=tools, tool_choice="auto")
         except ModelError as exc:
-            reply = _helper_outcome_summary(helper_outcomes, current, rules) if helper_outcomes else None
+            reply = _helper_outcome_summary(
+                helper_outcomes, current, rules, operation_failed=helper_operation_failed,
+            ) if helper_outcomes or helper_operation_failed else None
             if reply:
                 reply += " The follow-up response could not be generated; no retry was attempted."
                 current["messages"].append({"role": "assistant", "content": reply})
@@ -281,13 +436,19 @@ def run_manager_turn(
             if _is_refusal(user_message):
                 reply = _refusal_response(current, rules)
             elif helper_operation_failed:
-                reply = _helper_outcome_summary(helper_outcomes, current, rules)
-            elif not helper_outcomes and _has_unsupported_save_claim(reply):
-                active = _active_rule_id(current, rules)
-                label = next((rule["label"] for rule in rules if rule["id"] == active), None)
-                reply = "I didn't save any new information in this turn."
-                if label:
-                    reply += f" The current required fictional field remains {label}."
+                reply = _helper_outcome_summary(
+                    helper_outcomes, current, rules, operation_failed=helper_operation_failed,
+                )
+            elif _has_unsupported_save_claim(reply, current, rules, helper_outcomes):
+                if helper_outcomes:
+                    reply = _helper_outcome_summary(helper_outcomes, current, rules)
+                    reply += " No information was submitted to a bank."
+                else:
+                    active = _active_rule_id(current, rules)
+                    label = next((rule["label"] for rule in rules if rule["id"] == active), None)
+                    reply = "I can't confirm that any new information was saved or submitted in this turn."
+                    if label:
+                        reply += f" The current required fictional field remains {label}."
             current["messages"].append({"role": "assistant", "content": reply})
             return {"state": current, "reply": reply, "error": None, "tool_events": current["tool_events"]}
 

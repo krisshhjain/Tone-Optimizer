@@ -57,7 +57,7 @@ python -m streamlit run app.py
 
 V0 is the pinned baseline orchestration prompt. V1 uses a separate, instruction-only prompt for language adaptation, answer-first responses, context-aware tool use, and accurate customer-facing outcome explanations. Select **V0 — Baseline** or **V1 — Conversational** in the Streamlit sidebar to choose which file the same Manager implementation sends to Nemotron. Switching versions resets the current conversation and synthetic journey to the selected preset so messages and accepted values from one prompt version cannot contaminate the other. Resetting within a version keeps that version selected.
 
-V1 Phase 2 changes prompt instructions only. Both versions use the same Nemotron configuration and generation settings, the same two helper tools, the same six rules, and the same validation and state-transition logic. This prompt change is a hypothesis, not evidence that V1 improves conversation quality; compare actual responses using the rubric and manual checklist before drawing conclusions.
+V1 Phase 2 changed prompt instructions only. Phase 3 also refines the shared Python response safeguards for customer-friendly rejection summaries and unsupported save claims. Both prompt versions continue to use the same Nemotron configuration and generation settings, the same two helper tools, the same six rules, and the same validation and state-transition logic. Because the controller changed, rerun both V0 and V1 on the same controller revision; do not compare old-controller V0 results with new-controller V1 results as a prompt-only experiment. Prompt and controller changes are hypotheses, not evidence that V1 improves conversation quality; use actual responses and the rubric before drawing conclusions.
 
 ## Evaluation
 
@@ -128,7 +128,7 @@ Run these in the Streamlit app and record actual Nemotron replies, tool events, 
 5. **Full journey:** provide all six fictional fields in order. Expect helper-confirmed completion only; no approval claim.
 6. **Mixed values:** at an eligible state, submit one valid and one invalid field together. Expect accepted/rejected outcomes per field and a `partial` event where at least one operation succeeded.
 
-Use [`evaluation/v1_phase2_manual_checks.md`](evaluation/v1_phase2_manual_checks.md) for the twelve V1 language, context, privacy, refusal, and completion checks. It records expected helper/state behavior separately from the conversational improvement being evaluated. Use only fictional values and record actual live responses; offline fixtures are not model-quality evidence.
+Use [`evaluation/v1_phase2_manual_checks.md`](evaluation/v1_phase2_manual_checks.md) for the V1 Phase 2 language, context, privacy, refusal, and completion checks, and [`evaluation/v1_phase3_manual_checks.md`](evaluation/v1_phase3_manual_checks.md) for the follow-up language, tenure rejection, prior-state, privacy, approval, and consent checks. These notes separate expected helper/state behavior from conversational behavior. Use only fictional values and record actual live responses; offline fixtures are not model-quality evidence. The shared Manager may replace V0 or V1 wording after helper failures, refusals, or unsupported affirmative save claims.
 
 ## Reproducibility and later comparisons
 
@@ -139,8 +139,9 @@ V0 Phase 4 stabilized the baseline workflow and prepared reproducible evaluation
 ## Known limitations
 
 - Live Nemotron responses and structured-call behavior depend on the configured endpoint and model; offline results are workflow mocks, not model performance evidence.
-- The refusal and unsupported-save text safeguards are intentionally lightweight and phrase-based. They cover tested patterns, not every possible paraphrase or claim; helper state remains authoritative.
-- Shared Python response handling may replace model wording with a deterministic summary after rejected or partial helper outcomes, on refusals, or when the unsupported-save phrase check matches. These effects apply equally to V0 and V1 and can limit prompt-only improvements in naturalness.
+- The refusal and unsupported-save safeguards are lightweight pattern checks, not semantic classifiers. They cover tested forms, not every possible paraphrase; helper state remains authoritative.
+- Shared Python response handling may replace model wording with a deterministic rule-grounded explanation after rejected or partial helper outcomes, or a fixed response on refusals. An ungrounded affirmative save claim without helper confirmation is blocked; questions, clear negations, and field-specific claims grounded in accepted/staged session state are preserved. These effects apply equally to V0 and V1 and can limit prompt-only improvements in naturalness.
+- The Python helper validates only the consent Boolean. Whether natural-language wording expresses explicit and unambiguous consent remains the Manager model's responsibility and is not guaranteed by deterministic code.
 - Automatically detected critical violations are expected-transition mismatch candidates. Semantic policy claims still need human review.
 - No live runs or human quality scores are claimed by this repository change unless actual run artifacts are produced and reviewed.
 - Session state is temporary application memory, not durable storage. Provider-side handling has not been independently verified.
